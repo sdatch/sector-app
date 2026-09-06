@@ -1,0 +1,20 @@
+# Runtime dependencies for the backend container image.
+# Dev/test extras (pytest, hypothesis, ruff) live in pyproject [dev] and are
+# not installed into the production image.
+
+fastapi>=0.115
+uvicorn[standard]>=0.32
+pydantic>=2.9
+pydantic-settings>=2.5
+python-multipart>=0.0.12
+httpx>=0.27
+
+numpy>=2.1
+scipy>=1.14
+
+# M3 — auth + persistence (declared now so the image is stable across milestones)
+sqlalchemy[asyncio]>=2.0.35
+asyncpg>=0.29
+alembic>=1.13
+fastapi-users[sqlalchemy]>=13.0
+argon2-cffi>=23.1

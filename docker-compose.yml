@@ -1,0 +1,61 @@
+# Local containerized environment. Mirrors the Railway topology:
+#   backend  -> Railway service (this Dockerfile)
+#   frontend -> Railway service / Vercel (added in M4)
+#   postgres -> Railway Postgres plugin
+# Deploying to Railway means pointing it at the repo + adding the Postgres
+# plugin + setting env vars; no compose-specific reshaping.
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: sector
+      POSTGRES_PASSWORD: sector
+      POSTGRES_DB: sector
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U sector"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  backend:
+    build:
+      context: ./backend
+    environment:
+      ENVIRONMENT: development
+      ARTIFACTS_DIR: /srv/data/artifacts
+      MARKET_DATA_PROVIDER: synthetic
+      ACTIVE_SNAPSHOT_ID: synthetic-2024-12-31
+      DATABASE_URL: postgresql+asyncpg://sector:sector@postgres:5432/sector
+      JWT_SECRET: dev-insecure-change-me
+      FRONTEND_ORIGIN: http://localhost:3000
+    ports:
+      - "8000:8000"
+    volumes:
+      # Live-reload source in dev; artifacts persist across restarts.
+      - ./backend/app:/srv/app
+      - artifacts:/srv/data/artifacts
+    command: >
+      sh -c "uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload"
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  frontend:
+    build:
+      context: ./frontend
+      args:
+        # Browser-reachable backend URL (baked into the client bundle).
+        NEXT_PUBLIC_API_URL: http://localhost:8000
+    ports:
+      - "3000:3000"
+    depends_on:
+      - backend
+
+volumes:
+  pgdata:
+  artifacts:

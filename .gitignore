@@ -1,0 +1,26 @@
+# Python
+backend/.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+.ruff_cache/
+backend/data/
+
+# Node / Next.js
+frontend/node_modules/
+frontend/.next/
+frontend/out/
+
+# Env
+.env
+.env.local
+*.local
+
+# Verify-loop state (see sector-app-test-deploy.md)
+.claude/.loop-state.json
+
+# OS / editor
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/

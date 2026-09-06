@@ -1,0 +1,226 @@
+{
+  "black_litterman": {
+    "detail": {
+      "equilibrium_returns": {
+        "Communication Services": 0.09948976911665579,
+        "Consumer Discretionary": 0.11201709763299586,
+        "Consumer Staples": 0.10720068948749442,
+        "Energy": 0.08832494968877816,
+        "Financials": 0.10736483952062281,
+        "Health Care": 0.10400968472435243,
+        "Industrials": 0.10766330144987343,
+        "Information Technology": 0.12411353242815366,
+        "Materials": 0.09340001296389534,
+        "Real Estate": 0.08924828788907845,
+        "Utilities": 0.1016739924131756
+      },
+      "model_id": "black_litterman",
+      "optimal_weights": {
+        "Communication Services": 0.09090909090909086,
+        "Consumer Discretionary": 0.10101010101010084,
+        "Consumer Staples": 0.06060606060606065,
+        "Energy": 0.04040404040404047,
+        "Financials": 0.1313131313131314,
+        "Health Care": 0.13131313131313135,
+        "Industrials": 0.08080808080808093,
+        "Information Technology": 0.2929292929292927,
+        "Materials": 0.025252525252525287,
+        "Real Estate": 0.020202020202020315,
+        "Utilities": 0.02525252525252516
+      },
+      "posterior_returns": {
+        "Communication Services": 0.09948976911665579,
+        "Consumer Discretionary": 0.11201709763299586,
+        "Consumer Staples": 0.10720068948749442,
+        "Energy": 0.08832494968877816,
+        "Financials": 0.10736483952062281,
+        "Health Care": 0.10400968472435243,
+        "Industrials": 0.10766330144987343,
+        "Information Technology": 0.12411353242815366,
+        "Materials": 0.09340001296389534,
+        "Real Estate": 0.08924828788907845,
+        "Utilities": 0.1016739924131756
+      },
+      "views_applied": []
+    },
+    "diagnostics": {
+      "convergence_std_error": null,
+      "data_coverage_pct": 1.0,
+      "estimation_method": "parametric_normal",
+      "fit_r2": null,
+      "warnings": []
+    },
+    "distribution": {
+      "p25": 181189.42686507976,
+      "p5": 106072.62240691444,
+      "p50": 262882.51354610006,
+      "p75": 381408.65680741536,
+      "p95": 651508.5076638084
+    },
+    "metrics": {
+      "cvar_horizon": 14145.590996895175,
+      "expected_return": 0.1118762885765312,
+      "prob_loss": 0.03991285709700886,
+      "sharpe_ratio": 0.3947394455613073,
+      "var_horizon": -6072.622406914466,
+      "volatility": 0.17448544692206083
+    },
+    "model_id": "black_litterman",
+    "model_version": "bl.1",
+    "sector_attribution": [
+      {
+        "return_contribution": 0.031028383107038416,
+        "risk_contribution": 0.0455408784787072,
+        "sector": "Information Technology",
+        "weight": 0.25
+      },
+      {
+        "return_contribution": 0.026002421181088108,
+        "risk_contribution": 0.03924543243839227,
+        "sector": "Health Care",
+        "weight": 0.25
+      },
+      {
+        "return_contribution": 0.026841209880155703,
+        "risk_contribution": 0.04414564011334106,
+        "sector": "Financials",
+        "weight": 0.25
+      },
+      {
+        "return_contribution": 0.028004274408248965,
+        "risk_contribution": 0.045553495891620305,
+        "sector": "Consumer Discretionary",
+        "weight": 0.25
+      }
+    ]
+  },
+  "fama_french": {
+    "detail": {
+      "factor_loadings": {
+        "CMA": 0.07677948940622488,
+        "HML": 0.05863309297721778,
+        "MKT": 0.9867907418806589,
+        "RMW": -0.08808018379593655,
+        "SMB": -0.19765927598501615
+      },
+      "factor_premia_annual": {
+        "CMA": 0.008326840422017425,
+        "HML": -0.013407064469232283,
+        "MKT": 0.06667214547899564,
+        "RMW": 0.049994109394398786,
+        "SMB": 0.08493084482473821
+      },
+      "model_id": "fama_french",
+      "residual_volatility": 0.07670577630054518
+    },
+    "diagnostics": {
+      "convergence_std_error": null,
+      "data_coverage_pct": 1.0,
+      "estimation_method": "parametric_factor",
+      "fit_r2": 0.550483169067449,
+      "warnings": []
+    },
+    "distribution": {
+      "p25": 138642.52866996417,
+      "p5": 79685.65510466369,
+      "p50": 203740.25426111947,
+      "p75": 299403.73711157264,
+      "p95": 520923.0086878733
+    },
+    "metrics": {
+      "cvar_horizon": 35930.4683350721,
+      "expected_return": 0.08745382915736055,
+      "prob_loss": 0.10620397101201134,
+      "sharpe_ratio": 0.24631085503701422,
+      "var_horizon": 20314.344895336282,
+      "volatility": 0.18047856295525538
+    },
+    "model_id": "fama_french",
+    "model_version": "ff5.1",
+    "sector_attribution": [
+      {
+        "return_contribution": 0.02398569781984307,
+        "risk_contribution": 0.04720398368664151,
+        "sector": "Information Technology",
+        "weight": 0.25
+      },
+      {
+        "return_contribution": 0.023425150859706048,
+        "risk_contribution": 0.04050045559648444,
+        "sector": "Health Care",
+        "weight": 0.25
+      },
+      {
+        "return_contribution": 0.014486003909094481,
+        "risk_contribution": 0.04573811861297897,
+        "sector": "Financials",
+        "weight": 0.25
+      },
+      {
+        "return_contribution": 0.025556976568716964,
+        "risk_contribution": 0.04703600505915048,
+        "sector": "Consumer Discretionary",
+        "weight": 0.25
+      }
+    ]
+  },
+  "monte_carlo": {
+    "detail": {
+      "max_drawdown_p50": 0.37037825613611464,
+      "model_id": "monte_carlo",
+      "n_simulations": 8000,
+      "prob_double": 0.258625,
+      "return_model": "gbm"
+    },
+    "diagnostics": {
+      "convergence_std_error": 1071.8782473175186,
+      "data_coverage_pct": 1.0,
+      "estimation_method": "empirical_simulated",
+      "fit_r2": null,
+      "warnings": []
+    },
+    "distribution": {
+      "p25": 96514.55812567308,
+      "p5": 57074.71523011851,
+      "p50": 139061.09033200602,
+      "p75": 203213.71149604133,
+      "p95": 347623.3594772573
+    },
+    "metrics": {
+      "cvar_horizon": 54184.790921384265,
+      "expected_return": 0.04862260294974073,
+      "prob_loss": 0.272625,
+      "sharpe_ratio": 0.03231368990896151,
+      "var_horizon": 42925.28476988148,
+      "volatility": 0.17400064695741932
+    },
+    "model_id": "monte_carlo",
+    "model_version": "mc.1",
+    "sector_attribution": [
+      {
+        "return_contribution": 0.014180042336580514,
+        "risk_contribution": 0.0455408784787072,
+        "sector": "Information Technology",
+        "weight": 0.25
+      },
+      {
+        "return_contribution": 0.01942547854136536,
+        "risk_contribution": 0.03924543243839227,
+        "sector": "Health Care",
+        "weight": 0.25
+      },
+      {
+        "return_contribution": -0.005159517362317829,
+        "risk_contribution": 0.04414564011334106,
+        "sector": "Financials",
+        "weight": 0.25
+      },
+      {
+        "return_contribution": 0.020795415998587002,
+        "risk_contribution": 0.045553495891620305,
+        "sector": "Consumer Discretionary",
+        "weight": 0.25
+      }
+    ]
+  }
+}
