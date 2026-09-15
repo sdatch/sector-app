@@ -9,9 +9,10 @@ names before validation, and the header is located anywhere in a leading
 preamble (account lines, blanks, disclaimers) rather than assumed on row 1.
 Unknown columns are ignored; summary lines reported as skipped; tickers outside
 the snapshot universe rejected (they cannot be risk-modeled and admitting them
-would silently corrupt attribution). Broad-market funds are recognized and
-rejected under their own reason, so the UI can explain *why* rather than
-calling a household ETF unknown.
+would silently corrupt attribution). Funds are recognized and decomposed into
+the sectors they hold; the ones with no equity sleeve at all (bond funds,
+commodity trusts) are rejected under their own reason, so the UI can explain
+*why* rather than calling a household ETF unknown.
 
 Every row keeps its true file line number so the preview can play the file back
 to the user in its own order, included and excluded rows interleaved.
@@ -286,22 +287,25 @@ def parse_csv(
         warnings.append("weights converted to notional quantities vs $100k base")
 
     n_unknown = sum(r.reason == "unknown_ticker" for r in rejected)
-    n_bond = sum(r.reason == "no_equity_exposure" for r in rejected)
+    n_no_equity = sum(r.reason == "no_equity_exposure" for r in rejected)
     n_decomposed = sum(a.is_fund for a in accepted)
     if n_unknown:
         warnings.append(
             f"{n_unknown} holding{'' if n_unknown == 1 else 's'} outside the "
             "snapshot's ticker universe could not be risk-modeled"
         )
-    if n_bond:
+    if n_no_equity:
         warnings.append(
-            f"{n_bond} fixed-income fund{'' if n_bond == 1 else 's'} excluded — "
-            "bonds carry no equity sector exposure to model"
+            f"{n_no_equity} holding{'' if n_no_equity == 1 else 's'} excluded — "
+            "bond funds and commodity trusts carry no equity sector exposure "
+            "to model"
         )
     if n_decomposed:
+        one = n_decomposed == 1
         warnings.append(
-            f"{n_decomposed} fund{'' if n_decomposed == 1 else 's'} decomposed "
-            "into the sectors they hold, using typical published allocations"
+            f"{n_decomposed} fund{'' if one else 's'} decomposed into the "
+            f"sectors {'it holds' if one else 'they hold'}, using typical "
+            "published allocations"
         )
     for note in dict.fromkeys(
         a.note for a in accepted if a.is_fund and a.note

@@ -223,7 +223,9 @@ function CsvUpload({ onCreated }: { onCreated: () => void }) {
 function IngestSummary({ report }: { report: IngestReport }) {
   const lost = report.rejected.filter((r) => !BENIGN_REASONS.has(r.reason));
   const unknown = lost.filter((r) => r.reason === "unknown_ticker").length;
-  const bond = lost.filter((r) => r.reason === "no_equity_exposure").length;
+  const noEquity = lost.filter(
+    (r) => r.reason === "no_equity_exposure",
+  ).length;
   const funds = report.accepted.filter((a) => a.is_fund);
   const unmodeled = report.totals.unmodeled_share;
   const approximations = [
@@ -270,11 +272,12 @@ function IngestSummary({ report }: { report: IngestReport }) {
             {pct(unmodeled, 0)} of this portfolio has no equity sector exposure.
           </strong>
           <p>
-            That is the fixed-income side of your balanced or target-date funds.
-            Sector weights are computed over the equity sleeve only, so the
-            comparison describes <strong>{pct(1 - unmodeled, 0)}</strong> of your
-            money. Expect the risk numbers to look higher than your account
-            actually behaves — bonds are doing damping work the models never see.
+            That is the fixed-income side of your balanced or target-date funds,
+            plus any bond funds or commodity trusts. Sector weights are computed
+            over the equity sleeve only, so the comparison describes{" "}
+            <strong>{pct(1 - unmodeled, 0)}</strong> of your money. Expect the
+            risk numbers to read differently from how your account actually
+            behaves — those holdings diversify in ways the models never see.
           </p>
         </div>
       )}
@@ -290,11 +293,13 @@ function IngestSummary({ report }: { report: IngestReport }) {
             modeled. Sector weights are derived from those rows alone.
           </p>
           <ul>
-            {bond > 0 && (
+            {noEquity > 0 && (
               <li>
-                <strong>{bond}</strong> fixed-income{" "}
-                {bond === 1 ? "fund" : "funds"}. Bonds carry no equity sector
-                exposure, so there is nothing for a sector model to attribute.
+                <strong>{noEquity}</strong>{" "}
+                {noEquity === 1 ? "holding" : "holdings"} with no equity sector
+                exposure — bond funds and commodity trusts such as GLD. They
+                hold debt or metal, not shares in companies, so there is
+                nothing for a sector model to attribute.
               </li>
             )}
             {unknown > 0 && (

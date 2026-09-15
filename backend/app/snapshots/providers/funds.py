@@ -47,7 +47,8 @@ class FundComposition:
     """How one pooled vehicle maps onto the modelable sector universe."""
 
     name: str
-    kind: str  # us_broad | us_style | international | balanced | bond
+    kind: str  # us_broad | us_style | sector | international | balanced
+    #           | bond | commodity
     equity_share: float  # fraction mapping to GICS sectors, in [0, 1]
     sector_weights: dict[str, float]  # normalized to 1.0 within the equity sleeve
     approximation: str | None = None
@@ -135,6 +136,10 @@ _BOND_SLEEVE_NOTE = (
     "Only the equity sleeve is modeled; the fixed-income portion is excluded "
     "from the sector mix"
 )
+_INDUSTRY_NOTE = (
+    "This fund holds one industry within its sector, but is modeled with the "
+    "whole sector's returns — expect its real volatility to be higher"
+)
 
 
 def _fund(
@@ -153,6 +158,24 @@ def _fund(
         approximation=approximation,
     )
     return {t: comp for t in tickers.split()}
+
+
+def _sector_fund(
+    tickers: str,
+    label: str,
+    sector: str,
+    approximation: str | None = None,
+) -> dict[str, FundComposition]:
+    """A single-sector ETF: a fund whose breakdown happens to be one sector.
+
+    These live here rather than in the provider's ticker->sector table even
+    though their sector is unambiguous. Routing them through the fund table is
+    what makes the UI say "this is a fund, here is its breakdown" — a holder of
+    XLE is told they own an Energy *fund*, not handed a row that looks like a
+    single Energy stock. The resolved sector weight is identical either way;
+    what changes is that the disclosure happens at all.
+    """
+    return _fund(tickers, label, "sector", {sector: 100.0}, 1.0, approximation)
 
 
 FUND_COMPOSITION: dict[str, FundComposition] = {
@@ -251,11 +274,63 @@ FUND_COMPOSITION: dict[str, FundComposition] = {
         "balanced", _GLOBAL, equity_share=0.35,
         approximation=_BOND_SLEEVE_NOTE,
     ),
+    # -- Single-sector ETFs ------------------------------------------------
+    # One sector each, so the breakdown is trivial — but they are funds, and
+    # the user is told so.
+    **_sector_fund("XLK VGT IYW FTEC", "Information Technology sector fund", _IT),
+    **_sector_fund(
+        "IGV SOXX SMH", "Technology industry fund (software / semiconductors)",
+        _IT, approximation=_INDUSTRY_NOTE,
+    ),
+    **_sector_fund("XLV VHT IYH FHLC", "Health Care sector fund", _HC),
+    **_sector_fund(
+        "IBB XBI IHI", "Health Care industry fund (biotech / devices)", _HC,
+        approximation=_INDUSTRY_NOTE,
+    ),
+    **_sector_fund("XLF VFH IYF FNCL", "Financials sector fund", _FIN),
+    **_sector_fund(
+        "KRE KBE", "Banking industry fund", _FIN,
+        approximation=_INDUSTRY_NOTE,
+    ),
+    **_sector_fund("XLY VCR IYC FDIS", "Consumer Discretionary sector fund", _CD),
+    **_sector_fund("XLC VOX IYZ FCOM", "Communication Services sector fund", _COM),
+    **_sector_fund("XLI VIS IYJ FIDU", "Industrials sector fund", _IND),
+    **_sector_fund(
+        "ITA JETS", "Industrials industry fund (aerospace / airlines)", _IND,
+        approximation=_INDUSTRY_NOTE,
+    ),
+    **_sector_fund("XLP VDC IYK FSTA", "Consumer Staples sector fund", _CS),
+    **_sector_fund("XLE VDE IYE FENY", "Energy sector fund", _ENE),
+    **_sector_fund(
+        "XOP OIH AMLP", "Energy industry fund (E&P / services / midstream)",
+        _ENE, approximation=_INDUSTRY_NOTE,
+    ),
+    **_sector_fund("XLU VPU IDU FUTY", "Utilities sector fund", _UTL),
+    **_sector_fund("XLRE VNQ IYR FREL SCHH", "Real Estate sector fund", _RE),
+    **_sector_fund("XLB VAW IYM FMAT", "Materials sector fund", _MAT),
     # -- Fixed income: no equity sector exposure at all ---------------------
     **_fund(
         "BND AGG BNDX TLT IEF SHY LQD HYG JNK TIP VTIP MUB VCIT VCSH VGIT "
         "VGSH BSV BIV BLV SCHZ FXNAX VBTLX SGOV BIL SHV",
         "Bond fund", "bond", {}, equity_share=0.0,
+    ),
+    # -- Commodities: also no equity sector exposure ------------------------
+    # A bullion trust holds metal, not mining companies. Mapping GLD onto
+    # Materials because gold is a material would attribute a commodity's
+    # price risk to equities that behave nothing like it, and would feed the
+    # factor regressions a series with no factor exposure at all. It is not
+    # modelable here, and saying so is the honest answer.
+    **_fund(
+        "GLD GLDM IAU IAUM SGOL OUNZ AAAU BAR",
+        "Gold bullion trust", "commodity", {}, equity_share=0.0,
+    ),
+    **_fund(
+        "SLV SIVR PPLT PLTM PALL",
+        "Precious-metals bullion trust", "commodity", {}, equity_share=0.0,
+    ),
+    **_fund(
+        "USO BNO UNG UGA DBC DBA PDBC GSG COMT CPER CORN WEAT",
+        "Commodity futures fund", "commodity", {}, equity_share=0.0,
     ),
 }
 
