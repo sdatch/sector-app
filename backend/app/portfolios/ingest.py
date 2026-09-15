@@ -161,7 +161,10 @@ def parse_csv(
             rejected.append(
                 IngestRejected(
                     row=line_no, raw=raw, reason="summary_line",
-                    resolution="not a position — skipped",
+                    # No resolution. The UI renders "<label> — <resolution>",
+                    # and the label already reads "Summary line — not a
+                    # position"; anything here just repeats it back.
+                    resolution=None,
                 )
             )
             continue
@@ -201,9 +204,10 @@ def parse_csv(
                         row=line_no,
                         raw=raw,
                         reason="no_equity_exposure",
-                        resolution=(
-                            f"{comp.name} — no equity sector exposure to model"
-                        ),
+                        # Just the name: the reason label supplies "no
+                        # equity sector exposure to model", so repeating it
+                        # here renders the phrase twice in one cell.
+                        resolution=comp.name,
                     )
                 )
                 continue

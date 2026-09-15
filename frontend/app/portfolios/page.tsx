@@ -245,7 +245,8 @@ function IngestSummary({ report }: { report: IngestReport }) {
         <div className="info-notice">
           <strong>
             {funds.length} {funds.length === 1 ? "fund was" : "funds were"}{" "}
-            broken down into the sectors they hold.
+            broken down into the sectors{" "}
+            {funds.length === 1 ? "it holds" : "they hold"}.
           </strong>
           <p>
             A fund is not a sector, so each one is spread across the eleven GICS
@@ -424,7 +425,7 @@ function PreviewTableRow({ entry }: { entry: PreviewRow }) {
             {a.is_fund ? (
               <button className="link-btn" onClick={() => setOpen((o) => !o)}>
                 {open ? "▾" : "▸"} {a.fund_name ?? "Fund"} ·{" "}
-                {breakdown.length} sectors
+                {breakdown.length} {breakdown.length === 1 ? "sector" : "sectors"}
                 {a.equity_share < 1 && (
                   <> · {pct(a.equity_share, 0)} equity</>
                 )}
