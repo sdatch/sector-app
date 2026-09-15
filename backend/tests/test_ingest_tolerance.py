@@ -350,3 +350,25 @@ def test_no_pooled_vehicle_hides_in_the_sector_table():
 
     overlap = set(_TICKER_SECTOR) & set(FUND_COMPOSITION)
     assert overlap == set(), f"tickers in both tables: {sorted(overlap)}"
+
+
+def test_real_export_holdings_resolve(universe):
+    """Holdings from an actual brokerage export that used to be rejected.
+
+    Coverage on a real E*TRADE file sat at 60% because these names were
+    simply absent from the universe — nothing was wrong with the parser.
+    SPCX is pinned deliberately: SpaceX reads like a technology company, but
+    GICS classifies launch under Aerospace & Defense, and filing it under IT
+    would misattribute it in exactly the comparison this app exists to show.
+    """
+    ticker_sector, _, _ = universe
+    assert ticker_sector["MRVL"] == "Information Technology"
+    assert ticker_sector["ALAB"] == "Information Technology"
+    assert ticker_sector["POET"] == "Information Technology"
+    assert ticker_sector["SPCX"] == "Industrials"
+
+    csv = b"Symbol,Quantity\nMRVL,19\nALAB,5\nPOET,50\nSPCX,20\n"
+    report = parse_csv(csv, *universe)
+    assert {a.ticker for a in report.accepted} == {"MRVL", "ALAB", "POET", "SPCX"}
+    assert report.rejected == []
+    assert report.totals.coverage_pct == 1.0

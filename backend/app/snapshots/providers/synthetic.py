@@ -71,6 +71,7 @@ _TICKER_SECTOR: dict[str, str] = {
             "FTNT NXPI MCHP APH TEL GLW HPQ HPE DELL WDC STX NTAP KEYS TER "
             "SWKS MPWR ON ZBRA JNPR CTSH IT GDDY AKAM FSLR ENPH TYL PTC ANSS "
             "CRWD DDOG SNOW MDB NET ZS TEAM WDAY VEEV HUBS SMCI ARM PLTR "
+            "MRVL ALAB CRDO POET LSCC RMBS ALGM AMBA SITM"
         ).split()
     },
     # -- Health Care ------------------------------------------------------
@@ -119,7 +120,10 @@ _TICKER_SECTOR: dict[str, str] = {
             "CAT BA HON GE UPS RTX LMT UNP DE ETN ITW MMM NOC GD CSX NSC "
             "FDX EMR PH CMI PCAR ROK AME FAST GWW URI PWR CARR OTIS JCI "
             "TT IR DOV XYL SWK MAS AOS PNR TDG HWM LHX TXT HII AXON WM RSG "
-            "VRSK CPRT ODFL JBHT CHRW EXPD LUV DAL UAL AAL ALK"
+            "VRSK CPRT ODFL JBHT CHRW EXPD LUV DAL UAL AAL ALK "
+            # SpaceX: GICS puts launch/space under Aerospace & Defense, not
+            # Technology, despite the Starlink and compute businesses.
+            "SPCX RKLB LUNR ASTS"
         ).split()
     },
     # -- Consumer Staples -------------------------------------------------
