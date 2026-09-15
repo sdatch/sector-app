@@ -194,7 +194,7 @@ export interface IngestReport {
 /** Plain-language labels for IngestRejected.reason (backend ingest.py). */
 export const REJECT_REASON: Record<string, string> = {
   unknown_ticker: "Not in the modelable universe",
-  no_equity_exposure: "Fixed income — no equity sectors",
+  no_equity_exposure: "No equity sector exposure to model",
   summary_line: "Summary line — not a position",
   missing_quantity: "No quantity given",
   invalid_number: "Quantity could not be read",

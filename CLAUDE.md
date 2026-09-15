@@ -146,6 +146,16 @@ approximation)`. Two honesty constraints are baked into the shape:
 - `approximation` — what is being fudged (international mapped onto US sector
   returns, small-caps modeled with large-cap returns), surfaced to the user.
 
+`FUND_COMPOSITION` and the provider's `_TICKER_SECTOR` must stay **disjoint** —
+a test enforces it. Every pooled vehicle belongs in the fund table, *including*
+single-sector ETFs whose sector is unambiguous (XLE is `{Energy: 1.0}`): both
+tables resolve XLE to Energy, but only the fund table tells the holder they own
+a fund. Bullion trusts (GLD, SLV) and commodity funds are `equity_share = 0.0`
+alongside bond funds — they hold metal, not equities, so any sector assignment
+for them is a fiction that would feed the factor regressions a series with no
+factor exposure. Prices are hashed per ticker, so moving a ticker between the
+two tables never re-prices it or re-weights a saved portfolio.
+
 Decomposition happens in `portfolios/service.resolve_allocation` at **evaluation
 time**, not commit time — refreshed fund holdings then flow through to existing
 portfolios exactly the way refreshed prices already do. `Position.sector` stores

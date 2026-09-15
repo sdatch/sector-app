@@ -287,3 +287,88 @@ def test_excluded_bond_fund_counts_toward_unmodeled_share(universe):
 
     assert report.totals.unmodeled_share == pytest.approx(expected, abs=1e-4)
     assert report.totals.unmodeled_share > 0.05
+
+
+def test_sector_etf_is_disclosed_as_a_fund(universe):
+    """XLE resolves to Energy either way — the point is that the holder is
+    told it is a *fund*.
+
+    It used to sit in the provider's ticker->sector table, so the preview
+    returned is_fund=False with no name and no breakdown: a row visually
+    indistinguishable from owning a single Energy stock.
+    """
+    ticker_sector, _, funds = universe
+    assert "XLE" not in ticker_sector, "sector ETFs belong in FUND_COMPOSITION"
+
+    report = parse_csv(b"Symbol,Quantity\nXLE,20\n", *universe)
+    xle = report.accepted[0]
+    assert xle.is_fund
+    assert xle.fund_name == "Energy sector fund"
+    assert xle.equity_share == 1.0
+    assert xle.sector_breakdown == {"Energy": pytest.approx(1.0)}
+    assert funds["XLE"].kind == "sector"
+
+
+def test_sector_etf_resolves_to_exactly_its_own_sector(universe):
+    """Routing sector ETFs through decomposition must not move the weight:
+    a 100% XLE portfolio is still 100% Energy."""
+    from app.portfolios.sectors import FUND_SECTOR
+    from app.portfolios.service import resolve_allocation
+
+    _, prices, funds = universe
+    pf = _fake_portfolio("csv", [("XLE", 20, FUND_SECTOR)])
+    resolved = resolve_allocation(pf, prices, fund_composition=funds)
+
+    assert resolved.weights == {"Energy": pytest.approx(1.0)}
+    assert resolved.unmodeled_share == pytest.approx(0.0)
+
+
+def test_bullion_trust_is_not_an_equity_sector(universe):
+    """GLD holds gold, not mining companies.
+
+    It used to be listed under Materials, which handed a commodity's price
+    risk to the factor regressions as if it were an equity — and took real
+    portfolio weight with it.
+    """
+    ticker_sector, _, funds = universe
+    for t in ("GLD", "SLV"):
+        assert t not in ticker_sector
+
+    report = parse_csv(b"Symbol,Quantity\nGLD,24\nSLV,10\n", *universe)
+    assert report.accepted == []
+    assert {r.reason for r in report.rejected} == {"no_equity_exposure"}
+    assert report.totals.unmodeled_share == pytest.approx(1.0)
+    assert funds["GLD"].equity_share == 0.0
+    assert not funds["GLD"].modelable
+
+
+def test_no_pooled_vehicle_hides_in_the_sector_table():
+    """The two tables must stay disjoint. A ticker in both would resolve by
+    whichever lookup ran first, which is how XLE and GLD went undisclosed."""
+    from app.snapshots.providers.funds import FUND_COMPOSITION
+    from app.snapshots.providers.synthetic import _TICKER_SECTOR
+
+    overlap = set(_TICKER_SECTOR) & set(FUND_COMPOSITION)
+    assert overlap == set(), f"tickers in both tables: {sorted(overlap)}"
+
+
+def test_real_export_holdings_resolve(universe):
+    """Holdings from an actual brokerage export that used to be rejected.
+
+    Coverage on a real E*TRADE file sat at 60% because these names were
+    simply absent from the universe — nothing was wrong with the parser.
+    SPCX is pinned deliberately: SpaceX reads like a technology company, but
+    GICS classifies launch under Aerospace & Defense, and filing it under IT
+    would misattribute it in exactly the comparison this app exists to show.
+    """
+    ticker_sector, _, _ = universe
+    assert ticker_sector["MRVL"] == "Information Technology"
+    assert ticker_sector["ALAB"] == "Information Technology"
+    assert ticker_sector["POET"] == "Information Technology"
+    assert ticker_sector["SPCX"] == "Industrials"
+
+    csv = b"Symbol,Quantity\nMRVL,19\nALAB,5\nPOET,50\nSPCX,20\n"
+    report = parse_csv(csv, *universe)
+    assert {a.ticker for a in report.accepted} == {"MRVL", "ALAB", "POET", "SPCX"}
+    assert report.rejected == []
+    assert report.totals.coverage_pct == 1.0

@@ -47,14 +47,16 @@ FACTORS: tuple[str, ...] = ("MKT", "SMB", "HML", "RMW", "CMA")
 _FACTOR_PREMIA = np.array([0.060, 0.020, 0.030, 0.025, 0.015])
 _FACTOR_VOL = np.array([0.16, 0.10, 0.09, 0.07, 0.06])
 
-# Ticker -> sector reference table. Broad enough that a typical retail brokerage
-# export resolves rather than being mostly rejected: large/mid-cap US names
-# across all eleven sectors, plus the single-sector ETFs people actually hold.
+# Ticker -> sector reference table: large/mid-cap US names across all eleven
+# sectors, broad enough that a typical retail brokerage export resolves rather
+# than being mostly rejected.
 #
-# Only tickers that map to EXACTLY ONE sector belong here. Broad-market and
-# multi-sector funds (SPY, VTI, QQQ, target-date funds) are deliberately absent
-# and are classified separately by the ingester — see portfolios/ingest.py — so
-# they get an explanatory rejection rather than a misleading sector assignment.
+# INDIVIDUAL SECURITIES ONLY. Every pooled vehicle — including a single-sector
+# ETF like XLE, whose sector is unambiguous — belongs in FUND_COMPOSITION
+# instead, so that it is decomposed and *disclosed as a fund*. Listing one here
+# would resolve to the same sector weight while telling the holder they own a
+# stock. Commodity trusts (GLD, SLV) especially do not belong here: they hold
+# metal, not equities, and any sector assignment for them is a fiction.
 #
 # A real MarketDataProvider supplies the full reference table; this is the
 # offline stand-in. Order is irrelevant: prices are hashed per ticker, so adding
@@ -69,7 +71,7 @@ _TICKER_SECTOR: dict[str, str] = {
             "FTNT NXPI MCHP APH TEL GLW HPQ HPE DELL WDC STX NTAP KEYS TER "
             "SWKS MPWR ON ZBRA JNPR CTSH IT GDDY AKAM FSLR ENPH TYL PTC ANSS "
             "CRWD DDOG SNOW MDB NET ZS TEAM WDAY VEEV HUBS SMCI ARM PLTR "
-            "XLK VGT IYW FTEC IGV SOXX SMH"
+            "MRVL ALAB CRDO POET LSCC RMBS ALGM AMBA SITM"
         ).split()
     },
     # -- Health Care ------------------------------------------------------
@@ -80,7 +82,6 @@ _TICKER_SECTOR: dict[str, str] = {
             "ISRG SYK BSX MDT VRTX REGN ZTS BDX HCA MCK COR CAH BIIB MRNA "
             "IQV A IDXX RMD DXCM EW HOLX BAX ZBH STE WAT MTD PODD ALGN "
             "CNC HUM DVA UHS VTRS OGN TECH CRL LH DGX"
-            " XLV VHT IYH FHLC IBB XBI IHI"
         ).split()
     },
     # -- Financials -------------------------------------------------------
@@ -91,7 +92,6 @@ _TICKER_SECTOR: dict[str, str] = {
             "ICE CME AJG PNC USB TFC COF BK STT NTRS FITB HBAN RF CFG KEY "
             "MTB ALL TRV AIG MET PRU AFL HIG PFG L WRB CINF GL AIZ ACGL "
             "EG RJF AMP TROW BEN IVZ NDAQ MCO MSCI FI FIS GPN DFS SYF "
-            "XLF VFH IYF FNCL KRE KBE"
         ).split()
     },
     # -- Consumer Discretionary -------------------------------------------
@@ -102,7 +102,6 @@ _TICKER_SECTOR: dict[str, str] = {
             "HLT GM F RCL CCL NCLH LVS WYNN MGM DRI YUM DPZ ROST BURL ULTA "
             "LULU DECK TPR RL PVH GPS BBY DKS WSM TSCO GRMN POOL LKQ APTV "
             "BWA LEA DHI LEN NVR PHM TOL EBAY ETSY W CHWY DASH EXPE"
-            " XLY VCR IYC FDIS"
         ).split()
     },
     # -- Communication Services -------------------------------------------
@@ -112,7 +111,6 @@ _TICKER_SECTOR: dict[str, str] = {
             "GOOGL GOOG META NFLX DIS VZ T CMCSA TMUS CHTR EA TTWO RBLX "
             "WBD PARA FOX FOXA NWS NWSA OMC IPG LYV MTCH PINS SNAP SPOT "
             "TTD LUMN DISH ZM"
-            " XLC VOX IYZ FCOM"
         ).split()
     },
     # -- Industrials ------------------------------------------------------
@@ -122,8 +120,10 @@ _TICKER_SECTOR: dict[str, str] = {
             "CAT BA HON GE UPS RTX LMT UNP DE ETN ITW MMM NOC GD CSX NSC "
             "FDX EMR PH CMI PCAR ROK AME FAST GWW URI PWR CARR OTIS JCI "
             "TT IR DOV XYL SWK MAS AOS PNR TDG HWM LHX TXT HII AXON WM RSG "
-            "VRSK CPRT ODFL JBHT CHRW EXPD LUV DAL UAL AAL ALK"
-            " XLI VIS IYJ FIDU ITA JETS"
+            "VRSK CPRT ODFL JBHT CHRW EXPD LUV DAL UAL AAL ALK "
+            # SpaceX: GICS puts launch/space under Aerospace & Defense, not
+            # Technology, despite the Starlink and compute businesses.
+            "SPCX RKLB LUNR ASTS"
         ).split()
     },
     # -- Consumer Staples -------------------------------------------------
@@ -133,7 +133,6 @@ _TICKER_SECTOR: dict[str, str] = {
             "PG KO PEP WMT COST MDLZ MO PM CL KMB GIS KHC HSY SYY KR STZ "
             "K MKC CHD CLX SJM CAG CPB HRL TAP TSN ADM BG DG DLTR WBA "
             "EL KVUE MNST KDP CASY"
-            " XLP VDC IYK FSTA"
         ).split()
     },
     # -- Energy -----------------------------------------------------------
@@ -142,7 +141,6 @@ _TICKER_SECTOR: dict[str, str] = {
         for t in (
             "XOM CVX COP SLB EOG MPC PSX VLO OXY PXD HES WMB OKE KMI LNG "
             "TRGP BKR HAL DVN FANG CTRA APA MRO EQT AR RRC SWN OVV DINO "
-            "XLE VDE IYE FENY XOP OIH AMLP"
         ).split()
     },
     # -- Utilities --------------------------------------------------------
@@ -151,7 +149,6 @@ _TICKER_SECTOR: dict[str, str] = {
         for t in (
             "NEE DUK SO D AEP SRE EXC XEL ED PEG WEC ES AEE DTE PPL FE "
             "CMS CNP ATO NI LNT EVRG AES PNW NRG CEG VST AWK WTRG"
-            " XLU VPU IDU FUTY"
         ).split()
     },
     # -- Real Estate ------------------------------------------------------
@@ -161,7 +158,6 @@ _TICKER_SECTOR: dict[str, str] = {
             "PLD AMT SPG EQIX CCI PSA O WELL DLR VICI AVB EQR EXR MAA UDR "
             "ESS CPT INVH AMH ARE BXP VTR HST REG FRT KIM CBRE IRM SBAC "
             "WY DOC"
-            " XLRE VNQ IYR FREL SCHH"
         ).split()
     },
     # -- Materials --------------------------------------------------------
@@ -170,7 +166,6 @@ _TICKER_SECTOR: dict[str, str] = {
         for t in (
             "LIN SHW FCX APD ECL NEM DOW DD PPG NUE VMC MLM CTVA IFF ALB "
             "LYB CE EMN MOS CF STLD RS PKG IP AMCR AVY BALL SEE WRK CLF X"
-            " XLB VAW IYM FMAT GLD SLV"
         ).split()
     },
 }
