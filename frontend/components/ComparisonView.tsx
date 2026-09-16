@@ -5,6 +5,7 @@ import { DisclaimerInline } from "./Disclaimer";
 import ModelColumns from "./ModelColumns";
 import AttributionChart from "./AttributionChart";
 import AdviceDelta from "./AdviceDelta";
+import SuggestedShifts from "./SuggestedShifts";
 import CaveatsPanel from "./CaveatsPanel";
 
 const ACCENT: Record<ModelId, string> = {
@@ -25,6 +26,10 @@ export default function ComparisonView({
       <DistributionBands resource={resource} />
       <AttributionChart outcomes={resource.outcomes} />
       <AdviceDelta outcomes={resource.outcomes} />
+      <SuggestedShifts
+        outcomes={resource.outcomes}
+        riskLevel={resource.request.risk_level ?? "moderate"}
+      />
       <CaveatsPanel
         outcomes={resource.outcomes}
         notes={resource.normalization_notes}

@@ -92,6 +92,77 @@
         "sector": "Consumer Discretionary",
         "weight": 0.25
       }
+    ],
+    "suggested_shifts": [
+      {
+        "estimation_method": "parametric_normal",
+        "fraction": 0.1,
+        "from_sector": "Financials",
+        "metrics_after": {
+          "cvar_horizon": 11796.211744782311,
+          "expected_return": 0.1110887815361345,
+          "prob_loss": 0.03627832537326093,
+          "sharpe_ratio": 0.40017415550367996,
+          "var_horizon": -8449.549899173391,
+          "volatility": 0.17014787336886966
+        },
+        "metrics_before": {
+          "cvar_horizon": 14145.590996895175,
+          "expected_return": 0.1118762885765312,
+          "prob_loss": 0.03991285709700886,
+          "sharpe_ratio": 0.3947394455613073,
+          "var_horizon": -6072.622406914466,
+          "volatility": 0.17448544692206083
+        },
+        "to_sector": "Communication Services",
+        "warnings": []
+      },
+      {
+        "estimation_method": "parametric_normal",
+        "fraction": 0.1,
+        "from_sector": "Consumer Discretionary",
+        "metrics_after": {
+          "cvar_horizon": 11538.560537178026,
+          "expected_return": 0.11062355572489718,
+          "prob_loss": 0.03593586413001531,
+          "sharpe_ratio": 0.39965787984881807,
+          "var_horizon": -8651.617165410498,
+          "volatility": 0.16920360922316285
+        },
+        "metrics_before": {
+          "cvar_horizon": 14145.590996895175,
+          "expected_return": 0.1118762885765312,
+          "prob_loss": 0.03991285709700886,
+          "sharpe_ratio": 0.3947394455613073,
+          "var_horizon": -6072.622406914466,
+          "volatility": 0.17448544692206083
+        },
+        "to_sector": "Communication Services",
+        "warnings": []
+      },
+      {
+        "estimation_method": "parametric_normal",
+        "fraction": 0.1,
+        "from_sector": "Financials",
+        "metrics_after": {
+          "cvar_horizon": 12703.80966132706,
+          "expected_return": 0.11190613476945627,
+          "prob_loss": 0.03759152720096981,
+          "sharpe_ratio": 0.3995631386049393,
+          "var_horizon": -7610.165600651482,
+          "volatility": 0.17245368281478524
+        },
+        "metrics_before": {
+          "cvar_horizon": 14145.590996895175,
+          "expected_return": 0.1118762885765312,
+          "prob_loss": 0.03991285709700886,
+          "sharpe_ratio": 0.3947394455613073,
+          "var_horizon": -6072.622406914466,
+          "volatility": 0.17448544692206083
+        },
+        "to_sector": "Industrials",
+        "warnings": []
+      }
     ]
   },
   "fama_french": {
@@ -162,6 +233,77 @@
         "sector": "Consumer Discretionary",
         "weight": 0.25
       }
+    ],
+    "suggested_shifts": [
+      {
+        "estimation_method": "parametric_factor",
+        "fraction": 0.1,
+        "from_sector": "Financials",
+        "metrics_after": {
+          "cvar_horizon": 25950.287236580873,
+          "expected_return": 0.09775605230184471,
+          "prob_loss": 0.06863172430790374,
+          "sharpe_ratio": 0.3123239045086319,
+          "var_horizon": 8427.240772280973,
+          "volatility": 0.17531816012607318
+        },
+        "metrics_before": {
+          "cvar_horizon": 35930.4683350721,
+          "expected_return": 0.08745382915736055,
+          "prob_loss": 0.10620397101201134,
+          "sharpe_ratio": 0.24631085503701422,
+          "var_horizon": 20314.344895336282,
+          "volatility": 0.18047856295525538
+        },
+        "to_sector": "Real Estate",
+        "warnings": []
+      },
+      {
+        "estimation_method": "parametric_factor",
+        "fraction": 0.1,
+        "from_sector": "Financials",
+        "metrics_after": {
+          "cvar_horizon": 28155.941483950533,
+          "expected_return": 0.09404687979766953,
+          "prob_loss": 0.07653607553986475,
+          "sharpe_ratio": 0.2925855963087682,
+          "var_horizon": 11238.788204632307,
+          "volatility": 0.1744681913316037
+        },
+        "metrics_before": {
+          "cvar_horizon": 35930.4683350721,
+          "expected_return": 0.08745382915736055,
+          "prob_loss": 0.10620397101201134,
+          "sharpe_ratio": 0.24631085503701422,
+          "var_horizon": 20314.344895336282,
+          "volatility": 0.18047856295525538
+        },
+        "to_sector": "Energy",
+        "warnings": []
+      },
+      {
+        "estimation_method": "parametric_factor",
+        "fraction": 0.1,
+        "from_sector": "Information Technology",
+        "metrics_after": {
+          "cvar_horizon": 28289.160791916118,
+          "expected_return": 0.09395617473754526,
+          "prob_loss": 0.07696520950898714,
+          "sharpe_ratio": 0.2918687239445581,
+          "var_horizon": 11391.769569480952,
+          "volatility": 0.17458593729701796
+        },
+        "metrics_before": {
+          "cvar_horizon": 35930.4683350721,
+          "expected_return": 0.08745382915736055,
+          "prob_loss": 0.10620397101201134,
+          "sharpe_ratio": 0.24631085503701422,
+          "var_horizon": 20314.344895336282,
+          "volatility": 0.18047856295525538
+        },
+        "to_sector": "Real Estate",
+        "warnings": []
+      }
     ]
   },
   "monte_carlo": {
@@ -220,6 +362,83 @@
         "risk_contribution": 0.045553495891620305,
         "sector": "Consumer Discretionary",
         "weight": 0.25
+      }
+    ],
+    "suggested_shifts": [
+      {
+        "estimation_method": "parametric_normal",
+        "fraction": 0.1,
+        "from_sector": "Financials",
+        "metrics_after": {
+          "cvar_horizon": 36268.271036815364,
+          "expected_return": 0.0778654003272167,
+          "prob_loss": 0.11755032172065555,
+          "sharpe_ratio": 0.20600989715468557,
+          "var_horizon": 21719.02315734161,
+          "volatility": 0.1692413850439307
+        },
+        "metrics_before": {
+          "cvar_horizon": 54107.3830917754,
+          "expected_return": 0.04924141951421504,
+          "prob_loss": 0.2687695797499168,
+          "sharpe_ratio": 0.0357704302812312,
+          "var_horizon": 43299.93903521902,
+          "volatility": 0.17448544692206083
+        },
+        "to_sector": "Real Estate",
+        "warnings": [
+          "parametric_estimate"
+        ]
+      },
+      {
+        "estimation_method": "parametric_normal",
+        "fraction": 0.1,
+        "from_sector": "Information Technology",
+        "metrics_after": {
+          "cvar_horizon": 40684.75629916776,
+          "expected_return": 0.07012957644765735,
+          "prob_loss": 0.14703109536318915,
+          "sharpe_ratio": 0.16095920102786898,
+          "var_horizon": 27200.107710922355,
+          "volatility": 0.1685493980736153
+        },
+        "metrics_before": {
+          "cvar_horizon": 54107.3830917754,
+          "expected_return": 0.04924141951421504,
+          "prob_loss": 0.2687695797499168,
+          "sharpe_ratio": 0.0357704302812312,
+          "var_horizon": 43299.93903521902,
+          "volatility": 0.17448544692206083
+        },
+        "to_sector": "Real Estate",
+        "warnings": [
+          "parametric_estimate"
+        ]
+      },
+      {
+        "estimation_method": "parametric_normal",
+        "fraction": 0.1,
+        "from_sector": "Financials",
+        "metrics_after": {
+          "cvar_horizon": 41824.5318749881,
+          "expected_return": 0.06819694164135445,
+          "prob_loss": 0.1555527659782217,
+          "sharpe_ratio": 0.14948447499932763,
+          "var_horizon": 28598.237720643432,
+          "volatility": 0.1685589198575156
+        },
+        "metrics_before": {
+          "cvar_horizon": 54107.3830917754,
+          "expected_return": 0.04924141951421504,
+          "prob_loss": 0.2687695797499168,
+          "sharpe_ratio": 0.0357704302812312,
+          "var_horizon": 43299.93903521902,
+          "volatility": 0.17448544692206083
+        },
+        "to_sector": "Energy",
+        "warnings": [
+          "parametric_estimate"
+        ]
       }
     ]
   }

@@ -101,6 +101,29 @@ export default function Page() {
         different experiences along the way.
       </p>
 
+      <h3>5. Different suggested shifts</h3>
+      <p>
+        Under each model the app shows up to three sector shifts to explore,
+        such as &ldquo;move 10% from Financials to Real Estate.&rdquo; All three
+        models search the <em>same</em> candidates: every sector you hold
+        moving 5% or 10% of the portfolio into any other sector. Each model ranks those
+        candidates using its own expected returns and covariance, so the lists
+        often differ. A shift that appears for all three models holds up
+        whichever model you trust. A shift that appears for only one model
+        rests on that model&rsquo;s assumptions.
+      </p>
+      <p>
+        Every shift shown must raise the Sharpe ratio. The risk level you pick
+        decides what else a shift must do and which shifts come first.
+        Conservative shifts must lower volatility and are ranked by how much
+        they lower it. Moderate shifts may not raise volatility and are ranked
+        by Sharpe gain. Aggressive shifts may raise volatility by up to 10% and
+        are ranked by how much they add to expected return. Monte Carlo does
+        not run a separate simulation for each shift. It estimates shift
+        numbers in closed form from the same inputs it simulates from, and
+        labels them as estimates.
+      </p>
+
       <h2>How to actually use the comparison</h2>
       <ul>
         <li>

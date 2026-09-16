@@ -169,6 +169,33 @@ The weight tables are typical published allocations, **not live holdings** — t
 same standing as the synthetic prices beside them. A real provider would supply
 actual fund holdings into the same shape.
 
+## Suggested sector shifts
+
+Every `ModelOutcome` carries `suggested_shifts`: up to 3 tilts like "move 10%
+from Financials to Real Estate", limited by `CompareRequest.risk_level`. They are
+sector shifts, never tickers (PRD non-goal), and the copy never says buy or sell.
+
+- One generator, `engines/common/shifts.py`. Each engine calls it with its **own**
+  sector (mu, cov): FF-implied, BL posterior, historical for MC. The candidates
+  are the same for every model; the ranking differs, and that is the lesson.
+- No metric math of its own: numbers come from `normalize.portfolio_moments` +
+  `metrics_from_moments`. For FF/BL, `metrics_after` equals the engine's metrics
+  on the shifted weights (a property test). `metrics_before` uses the same
+  estimator, so the UI delta is the shift alone.
+- Candidates: every held sector moving 5% or 10% (capped at its weight) into any
+  other sector. All must strictly raise Sharpe. Risk level sets the volatility
+  cap *and* the ranking key: conservative = vol must fall, ranked by vol cut;
+  moderate = vol ≤ current, ranked by Sharpe gain; aggressive = vol ≤ 1.10×,
+  ranked by expected-return gain. (Ranking everything by Sharpe made the levels
+  indistinguishable, because the best Sharpe moves already lower vol.) At most
+  one shift per (from, to) pair.
+- Monte Carlo scores shifts in closed form from the moments it simulates
+  (re-simulating would break the first-paint budget), labeled
+  `parametric_normal` + warning `parametric_estimate`.
+- `suggested_shifts` is `None` on comparisons saved before the field existed
+  (the UI says "not computed"); `[]` means nothing qualified. Additive to schema
+  1.1, no migration. Keep `/learn/why-models-disagree` in sync with the constants.
+
 ## Snapshot staleness (load-bearing)
 
 `SnapshotBundle` carries the ticker reference tables, and artifacts persist to

@@ -14,6 +14,12 @@ Design principles:
      models can be added without touching the common core.
 
 Pydantic v2. Target: FastAPI POST /v1/compare
+
+v1.1 additive amendment (no version bump; every new field has a default):
+  - CompareRequest.risk_level (RiskLevel, default "moderate").
+  - ModelOutcome.suggested_shifts: up to 3 illustrative sector shifts per
+    model, each with the CommonMetrics the model reports after the shift.
+    Sector tilts only — never individual securities (PRD §3 non-goal).
 """
 
 from __future__ import annotations
@@ -75,6 +81,16 @@ class Allocation(BaseModel):
         return self
 
 
+class RiskLevel(str, Enum):
+    """How much volatility a suggested sector shift may add (v1.1 additive).
+    Caps are relative to the current portfolio's volatility and live in
+    engines/common/shifts.py."""
+
+    CONSERVATIVE = "conservative"  # lower volatility; ranked by vol cut
+    MODERATE = "moderate"  # volatility <= today; ranked by Sharpe gain
+    AGGRESSIVE = "aggressive"  # volatility <= 1.1x; ranked by return gain
+
+
 class InvestorView(BaseModel):
     """Black-Litterman view. Ignored by other models (echoed in assumptions
     so the comparison UI can show which models consumed it)."""
@@ -94,6 +110,7 @@ class CompareRequest(BaseModel):
     n_simulations: int | None = Field(
         default=10_000, description="Monte Carlo only; ignored elsewhere"
     )
+    risk_level: RiskLevel = RiskLevel.MODERATE  # v1.1 additive
 
 
 # --------------------------------------------------------------------------
@@ -138,6 +155,24 @@ class SectorAttribution(BaseModel):
         description="Component contribution to volatility (additive across "
                     "sectors, Euler decomposition)"
     )
+
+
+class SectorShift(BaseModel):
+    """An illustrative sector tilt (v1.1 additive): move `fraction` of the
+    portfolio from one sector to another, and the metrics the model would then
+    report. Educational — a lens on the model, not a trade recommendation.
+    Numbers come from engines/common/normalize.py like every other metric."""
+
+    from_sector: str
+    to_sector: str
+    fraction: float = Field(gt=0.0, le=1.0)
+    metrics_before: CommonMetrics = Field(
+        description="Current allocation under the same estimator as "
+        "metrics_after, so the delta is the shift and nothing else"
+    )
+    metrics_after: CommonMetrics
+    estimation_method: EstimationMethod
+    warnings: list[str] = Field(default_factory=list)
 
 
 class Diagnostics(BaseModel):
@@ -204,6 +239,12 @@ class ModelOutcome(BaseModel):
     sector_attribution: list[SectorAttribution]
     diagnostics: Diagnostics
     detail: ModelDetail
+    suggested_shifts: list[SectorShift] | None = Field(
+        default=None,
+        description="Up to 3 Sharpe-improving sector shifts within the "
+        "request's risk_level (v1.1 additive). Empty list: none qualify. "
+        "None: not computed (comparisons saved before the field existed)",
+    )
 
 
 class DataSnapshot(BaseModel):
