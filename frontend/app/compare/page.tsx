@@ -9,10 +9,13 @@ import { useLiveComparison } from "@/lib/useLiveComparison";
 import {
   ALL_MODELS,
   MODEL_LABEL,
+  RISK_LEVEL_HINT,
+  RISK_LEVEL_LABEL,
   SECTORS,
   type CompareRequest,
   type ModelId,
   type Portfolio,
+  type RiskLevel,
 } from "@/lib/types";
 import ComparisonView from "@/components/ComparisonView";
 import Matrix, { type MatrixItem } from "@/components/Matrix";
@@ -26,6 +29,7 @@ function CompareInner() {
   const [selected, setSelected] = useState<string[]>([]);
   const [horizon, setHorizon] = useState(120);
   const [nSims, setNSims] = useState(10000);
+  const [riskLevel, setRiskLevel] = useState<RiskLevel>("moderate");
   const [models, setModels] = useState<ModelId[]>(ALL_MODELS);
   const [viewSector, setViewSector] = useState("");
   const [viewReturn, setViewReturn] = useState(10);
@@ -57,6 +61,7 @@ function CompareInner() {
     horizon_months: horizon,
     models,
     n_simulations: nSims,
+    risk_level: riskLevel,
     views:
       viewSector && models.includes("black_litterman")
         ? [
@@ -172,6 +177,20 @@ function CompareInner() {
                 value={nSims}
                 onChange={(e) => setNSims(parseInt(e.target.value) || 10000)}
               />
+            </div>
+            <div className="field">
+              <label>Risk level for suggested shifts</label>
+              <select
+                value={riskLevel}
+                onChange={(e) => setRiskLevel(e.target.value as RiskLevel)}
+              >
+                {(Object.keys(RISK_LEVEL_LABEL) as RiskLevel[]).map((r) => (
+                  <option key={r} value={r}>
+                    {RISK_LEVEL_LABEL[r]}
+                  </option>
+                ))}
+              </select>
+              <div className="muted small">{RISK_LEVEL_HINT[riskLevel]}</div>
             </div>
           </div>
         </div>

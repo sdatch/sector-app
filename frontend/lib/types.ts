@@ -8,6 +8,20 @@ export type OutcomeStatus =
   | "complete"
   | "failed";
 export type ComparisonStatus = "running" | "complete" | "partial" | "failed";
+export type RiskLevel = "conservative" | "moderate" | "aggressive";
+
+export const RISK_LEVEL_LABEL: Record<RiskLevel, string> = {
+  conservative: "Conservative",
+  moderate: "Moderate",
+  aggressive: "Aggressive",
+};
+
+// Mirrors backend engines/common/shifts.py — every level requires a Sharpe gain.
+export const RISK_LEVEL_HINT: Record<RiskLevel, string> = {
+  conservative: "Shifts that lower volatility, biggest cut first.",
+  moderate: "Volatility no higher than today, best Sharpe gain first.",
+  aggressive: "Volatility up to 10% higher, biggest return gain first.",
+};
 
 export const MODEL_LABEL: Record<ModelId, string> = {
   fama_french: "Fama-French 5-Factor",
@@ -87,6 +101,17 @@ export interface ModelOutcome {
   sector_attribution: SectorAttribution[];
   diagnostics: Diagnostics;
   detail: any;
+  suggested_shifts?: SectorShift[] | null;
+}
+
+export interface SectorShift {
+  from_sector: string;
+  to_sector: string;
+  fraction: number;
+  metrics_before: CommonMetrics;
+  metrics_after: CommonMetrics;
+  estimation_method: string;
+  warnings: string[];
 }
 
 export interface OutcomeError {
@@ -123,6 +148,7 @@ export interface CompareRequest {
   models: ModelId[];
   views?: InvestorView[];
   n_simulations?: number;
+  risk_level?: RiskLevel;
 }
 
 export interface ComparisonResource {

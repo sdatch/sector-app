@@ -33,9 +33,11 @@ from app.contracts.comparison import (
     ModelOutcome,
     MonteCarloDetail,
     OutcomeStatus,
+    SectorShift,
 )
 
 from .base import EvaluationContext, OutcomeTransition
+from .common.shifts import suggest_shifts
 from .common.normalize import (
     distribution_from_paths,
     euler_attribution,
@@ -116,6 +118,15 @@ class MonteCarloEngine:
         n_steps = max(int(round(ctx.horizon_years * 12)), 1)
         sizes = _chunk_sizes(n_total, self._provisional, self._chunk)
         loop = asyncio.get_running_loop()
+        # Shifts are scored in closed form from the same GBM moments the paths
+        # are simulated from — re-simulating every candidate would blow the
+        # first-paint budget. Labeled parametric so the UI says so.
+        shifts = suggest_shifts(
+            w, a.sector_mu_annual, Sigma, a.sectors, ctx.request.risk_level,
+            ctx.horizon_years, ctx.confidence, ctx.initial_value,
+            a.risk_free_annual, EstimationMethod.PARAMETRIC_NORMAL,
+            warnings=["parametric_estimate"],
+        )
 
         yield OutcomeTransition(
             model_id=self.model_id, status=OutcomeStatus.RUNNING, progress_pct=0.0
@@ -145,7 +156,7 @@ class MonteCarloEngine:
             if i == 0 and len(sizes) > 1:
                 # Provisional paint from the first chunk only.
                 yield self._build_transition(
-                    ctx, term, dd, mu_p, sigma_p, Sigma,
+                    ctx, term, dd, mu_p, sigma_p, Sigma, shifts,
                     status=OutcomeStatus.PROVISIONAL, progress_pct=pct,
                     provisional=True,
                 )
@@ -159,7 +170,7 @@ class MonteCarloEngine:
         all_term = np.concatenate(terminals)
         all_dd = np.concatenate(drawdowns)
         yield self._build_transition(
-            ctx, all_term, all_dd, mu_p, sigma_p, Sigma,
+            ctx, all_term, all_dd, mu_p, sigma_p, Sigma, shifts,
             status=OutcomeStatus.COMPLETE, progress_pct=1.0, provisional=False,
         )
 
@@ -171,6 +182,7 @@ class MonteCarloEngine:
         mu_p: float,
         sigma_p: float,
         Sigma: np.ndarray,
+        shifts: list[SectorShift],
         status: OutcomeStatus,
         progress_pct: float,
         provisional: bool,
@@ -213,6 +225,7 @@ class MonteCarloEngine:
             sector_attribution=attribution,
             diagnostics=diagnostics,
             detail=detail,
+            suggested_shifts=shifts,
         )
         return OutcomeTransition(
             model_id=self.model_id,

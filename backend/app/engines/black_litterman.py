@@ -26,6 +26,7 @@ from app.contracts.comparison import (
 )
 
 from .base import EvaluationContext, OutcomeTransition
+from .common.shifts import suggest_shifts
 from .common.normalize import (
     distribution_from_moments,
     euler_attribution,
@@ -124,6 +125,11 @@ class BlackLittermanEngine:
             mu_p, sigma_p, ctx.horizon_years, ctx.initial_value
         )
         attribution = euler_attribution(w, posterior_total, Sigma, sectors)
+        shifts = suggest_shifts(
+            w, posterior_total, Sigma, sectors, ctx.request.risk_level,
+            ctx.horizon_years, ctx.confidence, ctx.initial_value, rf,
+            EstimationMethod.PARAMETRIC_NORMAL,
+        )
 
         detail = BlackLittermanDetail(
             equilibrium_returns={
@@ -152,6 +158,7 @@ class BlackLittermanEngine:
             sector_attribution=attribution,
             diagnostics=diagnostics,
             detail=detail,
+            suggested_shifts=shifts,
         )
         yield OutcomeTransition(
             model_id=self.model_id,

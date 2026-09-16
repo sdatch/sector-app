@@ -181,3 +181,18 @@ async def test_sse_terminal_replay_on_late_subscribe(client):
 async def test_get_unknown_404(client):
     r = await client.get("/v1/comparisons/00000000-0000-0000-0000-000000000009")
     assert r.status_code == 404
+
+
+async def test_risk_level_echoed_and_shifts_returned(client):
+    sectors = snapshot_sectors(client)
+    req = equal_weight_request(sectors, ALL)
+    req["risk_level"] = "conservative"
+    r = await client.post("/v1/comparisons", json=req)
+    assert r.status_code == 201
+    final = await _poll_until_terminal(client, r.json()["id"])
+    assert final["request"]["risk_level"] == "conservative"
+    for o in final["outcomes"]:
+        shifts = o["outcome"]["suggested_shifts"]
+        assert 0 < len(shifts) <= 3
+        for s in shifts:
+            assert s["metrics_after"]["volatility"] < s["metrics_before"]["volatility"]
