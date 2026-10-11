@@ -31,7 +31,9 @@ Next.js frontend  ->  FastAPI app
                         contracts/      comparison.py — the wire schema
                         engines/        base protocol + 3 engines + common/normalize
                         snapshots/      builder, artifacts, providers/ (synthetic|real)
+                        portfolios/     ingestion, resolution, portfolio routes  (M3)
                         db/             SQLAlchemy models, migrations           (M3)
+                        narration/      optional LLM wording, OFF by default (post-v1)
 Postgres  = user state only (users, portfolios, positions, comparisons, progress)
 Snapshots = memory-mapped npz artifacts keyed by snapshot_id (NEVER in SQL)
 ```
@@ -45,7 +47,15 @@ Snapshots = memory-mapped npz artifacts keyed by snapshot_id (NEVER in SQL)
    them to the normalizer. They never implement sqrt-t scaling, VaR signs, or
    Euler attribution themselves. This is *why* three models are comparable.
 3. **The orchestration/API layer never names a model.** No "fama"/"litterman"/
-   "monte" outside `engines/`. It consumes a uniform `OutcomeTransition` stream.
+   "monte" in logic or user-facing copy outside `engines/` — the discriminated
+   union in `contracts/` and explanatory *comments* are the exceptions, and a
+   comment cannot go stale into a user's face. It consumes a uniform
+   `OutcomeTransition` stream. Copy that needs a model's name reads
+   `display_name` off the engine through the registry (that is why the
+   narration layer can say "Black-Litterman" without breaking this). Where
+   copy can avoid naming one, it does: the VaR/CVaR caveat in `comparator.py`
+   speaks of "simulated" models, because it branches on `EstimationMethod` and
+   would otherwise be wrong the day a second simulated engine is registered.
    Adding model #4 = implement the protocol + register + add a detail variant to
    the contract union. Nothing else changes.
 4. **Determinism (NFR-2).** Identical request + snapshot => bit-identical result.
@@ -76,7 +86,7 @@ to parametric ones as `n_simulations → ∞` (a property test).
 ## Status: all milestones (M1–M5) complete
 
 The full PRD v1 is built and running in `docker compose` (frontend :3000,
-backend :8000, Postgres :5432); 125 backend tests green. Remaining before a real
+backend :8000, Postgres :5432); 128 backend tests green. Remaining before a real
 launch: a mail provider (verification tokens are logged today), user-facing
 manual QA, and final disclaimer-copy review (PRD §13).
 
@@ -113,8 +123,10 @@ optional, off-by-default Claude narration layer for the moves it suggests.
   delta, multi-portfolio matrix (client-composed parallel POSTs), assumptions/
   caveats panel from API transparency fields, disclaimer footer + per-comparison
   inline. Builds clean; full stack in compose (frontend:3000). CORS + cross-origin
-  cookie/SSE verified. Live browser click-through pending (Chrome ext not
-  connected this session).
+  cookie/SSE verified. Live browser click-through done (2026-10-11, via the
+  Chrome extension) — it is now a standing stage of the verify loop, not a
+  one-off, and it is where the display-rounding and copy defects surface that
+  the test suite cannot see.
 - **M5 ✅ DONE** — comparison DB persistence (finalize → comparisons table),
   history list + reopen from DB after in-memory eviction (U8), per-portfolio
   progress trajectory reconstructed from snapshot history + daily maintenance
@@ -339,6 +351,18 @@ cd frontend && npm install && npm run dev   # http://localhost:3000
 ```
 No mail server yet: the email-verification token is printed to the backend logs
 (`docker compose logs backend | grep verify`); paste it on the /verify page.
+
+Narration is off by default. To see the narrated UI — including its disclosure
+line — with no API key and no spend:
+```
+NARRATION_ENABLED=true NARRATION_STUB=true docker compose up -d backend
+```
+The stub writes the same sentence the real model is asked for, from the payload
+alone; it is ignored when `ENVIRONMENT=production`. For the real thing, swap
+`NARRATION_STUB` for `ANTHROPIC_API_KEY=...`. Both pass through
+`docker-compose.yml` from the shell. The `anthropic` package is in
+`requirements.txt` but imported lazily, so the app and its tests run whether or
+not it is installed — a test asserts exactly that.
 
 ## Deployment target
 

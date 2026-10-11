@@ -71,9 +71,13 @@ def _normalization_notes(models: list[ModelId], envelopes) -> list[str]:
             EstimationMethod.PARAMETRIC_FACTOR,
         }
     ):
+        # Phrased by estimation method, not by model name: the branch above
+        # already keys off EstimationMethod, and naming a model here would be
+        # the one thing invariant 3 forbids this layer — and would quietly go
+        # wrong the day a second simulated engine is registered.
         notes.append(
             "VaR/CVaR are parametric for closed-form models and empirical for "
-            "Monte Carlo — tail estimates differ by design, not by error."
+            "simulated ones — tail estimates differ by design, not by error."
         )
     for e in envelopes.values():
         if e.error is not None:
