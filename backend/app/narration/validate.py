@@ -25,7 +25,10 @@ MIN_LEN = 20
 MAX_LEN = 450
 
 # Tolerated all-caps tokens; anything else of that shape reads as a ticker.
-_CAPS_OK = frozenset({"US", "GICS", "VAR", "CVAR", "ETF"})
+# "ETF" is NOT tolerated: the prompt forbids fund talk, so a reply reaching for
+# it has strayed. Nor are VAR/CVAR — we supply no such figure, so naming one
+# means inventing it.
+_CAPS_OK = frozenset({"US", "GICS"})
 _TICKER_RE = re.compile(r"\$[A-Za-z]|\b[A-Z]{2,5}\b")
 
 _NUMBER_RE = re.compile(r"[-+]?\d[\d,]*(?:\.\d+)?")

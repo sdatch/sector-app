@@ -163,7 +163,9 @@ def test_foreign_sector():
     assert check(out(text)) is RejectReason.FOREIGN_SECTOR
 
 
-@pytest.mark.parametrize("token", ["XLE", "$AAPL", "consider VTI here"])
+@pytest.mark.parametrize(
+    "token", ["XLE", "$AAPL", "consider VTI here", "an ETF instead"]
+)
 def test_ticker_like(token):
     assert check(out(f"{GOOD} Also {token}.")) is RejectReason.TICKER_LIKE
 

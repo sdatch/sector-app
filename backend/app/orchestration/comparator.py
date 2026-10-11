@@ -144,6 +144,11 @@ class ComparisonManager:
         first's comparison id. They already hold the full payload at that
         point, so letting them re-read it exposes nothing new — and it keeps
         GET, SSE and narration working after a cache hit.
+
+        In-memory, like the state it guards: after a restart the second user
+        falls through to the durable row, which is user-scoped, and gets a 404.
+        That is not a regression (they could never reopen it before either),
+        and it does not affect narration, which runs against the live state.
         """
         state = self._store.get(comparison_id)
         if state is None or state.user_id in (None, user_id):
