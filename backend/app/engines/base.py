@@ -106,6 +106,11 @@ class OutcomeTransition:
 class RiskModelEngine(Protocol):
     model_id: ModelId
     model_version: str
+    # Human-readable name for copy. It lives here, on the engine, so that model
+    # names stay inside engines/ (invariant 3): the narration layer looks it up
+    # through the registry rather than keeping a map of its own, and model #4
+    # still costs nothing outside its own module.
+    display_name: str
 
     def evaluate(
         self, ctx: EvaluationContext

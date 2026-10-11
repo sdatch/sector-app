@@ -104,6 +104,8 @@ class ComparisonManager:
         self._channels = ChannelRegistry()
         self._cache = ComparisonCache()
         self._tasks: dict[str, asyncio.Task] = {}
+        # comparison_id -> users served this resource from the shared cache.
+        self._shared: dict[str, set[str]] = {}
 
     # -- lookups -------------------------------------------------------------
 
@@ -127,7 +129,31 @@ class ComparisonManager:
         state = self._store.get(comparison_id)
         # Cache-only results (no live state) are deterministic and not tied to a
         # user session; ownership is enforced on stateful resources.
-        return state is None or state.user_id is None or state.user_id == user_id
+        if state is None or state.user_id is None or state.user_id == user_id:
+            return True
+        # Anyone the API has already handed the whole resource to — a cache hit
+        # serves another user's comparison id verbatim — may read it again.
+        # Without this, every follow-up call on a cache-hit id 404s for them.
+        return user_id in self._shared.get(comparison_id, frozenset())
+
+    def grant_access(self, comparison_id: str, user_id: str) -> None:
+        """Record that `user_id` has legitimately received this resource.
+
+        The deterministic cache is not keyed per user, so two users with the
+        same resolved weights share an entry and the second is handed the
+        first's comparison id. They already hold the full payload at that
+        point, so letting them re-read it exposes nothing new — and it keeps
+        GET, SSE and narration working after a cache hit.
+
+        In-memory, like the state it guards: after a restart the second user
+        falls through to the durable row, which is user-scoped, and gets a 404.
+        That is not a regression (they could never reopen it before either),
+        and it does not affect narration, which runs against the live state.
+        """
+        state = self._store.get(comparison_id)
+        if state is None or state.user_id in (None, user_id):
+            return
+        self._shared.setdefault(comparison_id, set()).add(user_id)
 
     async def create(
         self,

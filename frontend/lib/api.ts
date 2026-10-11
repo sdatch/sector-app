@@ -5,7 +5,9 @@ import type {
   DataSnapshot,
   IngestReport,
   Me,
+  ModelId,
   Portfolio,
+  SectorWeight,
 } from "./types";
 
 export const API_BASE =
@@ -88,6 +90,19 @@ export const getPortfolio = (id: string) =>
 export const deletePortfolio = (id: string) =>
   api<void>(`/v1/portfolios/${id}`, { method: "DELETE" });
 
+// The portfolio's sector mix under the active snapshot, plus what it leaves
+// out: funds are decomposed at evaluation time, so a 60/40 fund reports a
+// 0.4 unmodeled_share rather than quietly inflating the equity weights.
+export interface PortfolioAllocation {
+  portfolio_id: string;
+  snapshot_id: string;
+  sector_weights: SectorWeight[];
+  unmodeled_share: number;
+  approximations: string[];
+}
+export const getPortfolioAllocation = (id: string) =>
+  api<PortfolioAllocation>(`/v1/portfolios/${id}/allocation`);
+
 export const previewCsv = (file: File) => {
   const form = new FormData();
   form.append("file", file);
@@ -123,6 +138,28 @@ export const createComparison = (req: CompareRequest) =>
 
 export const getComparison = (id: string) =>
   api<ComparisonResource>(`/v1/comparisons/${id}`);
+
+// Optional plain-language wording for a model's suggested shifts. The backend
+// decides nothing about *which* moves exist — it only rewrites the sentence.
+// `source: "template"` with an empty `moves` means "render your own copy"
+// (lib/moves.ts), which is also exactly what a flag-off backend returns, so
+// there is no failure case for a caller to handle.
+export interface NarratedMove {
+  from_sector: string;
+  to_sector: string;
+  text: string;
+}
+export interface NarrationResponse {
+  model_id: ModelId;
+  source: "claude" | "template";
+  moves: NarratedMove[];
+  prompt_version: string | null;
+}
+export const getNarration = (comparisonId: string, model_id: ModelId) =>
+  api<NarrationResponse>(`/v1/comparisons/${comparisonId}/narration`, {
+    method: "POST",
+    json: { model_id },
+  });
 
 export interface ComparisonSummary {
   id: string;

@@ -33,6 +33,15 @@ services:
       DATABASE_URL: postgresql+asyncpg://sector:sector@postgres:5432/sector
       JWT_SECRET: dev-insecure-change-me
       FRONTEND_ORIGIN: http://localhost:3000
+      # Optional narration layer, off unless asked for. Pass through from the
+      # shell so the flag can be exercised locally the way Railway sets it as a
+      # service variable:
+      #   NARRATION_ENABLED=true NARRATION_STUB=true docker compose up -d backend
+      # NARRATION_STUB narrates from a local stub (no key, no spend) and is
+      # ignored when ENVIRONMENT=production.
+      NARRATION_ENABLED: ${NARRATION_ENABLED:-false}
+      NARRATION_STUB: ${NARRATION_STUB:-false}
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
     ports:
       - "8000:8000"
     volumes:

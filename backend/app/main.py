@@ -20,11 +20,13 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
 from app.api.comparisons import router as comparisons_router
+from app.api.narration import router as narration_router
 from app.auth.schemas import UserCreate, UserRead, UserUpdate
 from app.auth.users import ConsentRequired, auth_backend, fastapi_users
 from app.config import get_settings
 from app.engines import build_registry
 from app.history.service import persist_comparison
+from app.narration import NarrationCache
 from app.orchestration.cache import IdempotencyStore
 from app.orchestration.comparator import ComparisonManager
 from app.orchestration.rate_limit import SlidingWindowLimiter
@@ -70,12 +72,26 @@ async def lifespan(app: FastAPI):
     app.state.idempotency = IdempotencyStore()
     app.state.limiter = SlidingWindowLimiter(settings.comparisons_per_minute)
 
+    # Optional narration layer (off by default). The engine registry is exposed
+    # so narration can read a model's display_name without naming models
+    # itself; the client stays None until a request actually needs it, so the
+    # anthropic SDK is never imported when the flag is off.
+    app.state.engines = engines
+    app.state.narration_client = None
+    app.state.narration_cache = NarrationCache(settings.narration_cache_size)
+    app.state.narration_limiter = SlidingWindowLimiter(
+        settings.narration_per_minute
+    )
+
     # Daily maintenance: value portfolios into progress_points + purge expired.
     maintenance = asyncio.create_task(maintenance_loop(bundle, settings))
     try:
         yield
     finally:
         maintenance.cancel()
+        client = getattr(app.state, "narration_client", None)
+        if client is not None:
+            await client.aclose()
         if executor is not None:
             executor.shutdown(cancel_futures=True)
 
@@ -132,6 +148,7 @@ def create_app() -> FastAPI:
     # --- app resources ---
     app.include_router(portfolios_router)
     app.include_router(comparisons_router)
+    app.include_router(narration_router)
     app.include_router(progress_router)
     return app
 

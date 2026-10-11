@@ -288,6 +288,47 @@ th.num {
   color: var(--text-muted);
 }
 
+/* ---- Easy mode ------------------------------------------------------- */
+/* One model at a time, so the model switch is a tab strip rather than three
+   columns. Each tab carries its own --accent, as .model-col .head does. */
+
+.easy-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+}
+.easy-tab {
+  appearance: none;
+  cursor: pointer;
+  font: inherit;
+  padding: 0.45rem 0.9rem;
+  color: var(--text-muted);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-bottom: 3px solid var(--border);
+  border-radius: var(--radius);
+}
+.easy-tab:hover {
+  color: var(--text);
+}
+.easy-tab[aria-selected="true"] {
+  color: var(--text);
+  font-weight: 650;
+  background: var(--surface-2);
+  border-bottom-color: var(--accent);
+}
+.easy-move {
+  padding: 0.9rem 0;
+  border-top: 1px solid var(--border);
+}
+.easy-move-head {
+  font-weight: 650;
+  margin-bottom: 0.3rem;
+}
+.easy-move-text {
+  margin: 0 0 0.6rem;
+}
+
 /* ---- Learn section --------------------------------------------------- */
 
 .learn-grid {

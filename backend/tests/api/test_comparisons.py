@@ -196,3 +196,39 @@ async def test_risk_level_echoed_and_shifts_returned(client):
         assert 0 < len(shifts) <= 3
         for s in shifts:
             assert s["metrics_after"]["volatility"] < s["metrics_before"]["volatility"]
+
+
+async def test_cache_hit_grants_the_second_user_access(two_clients):
+    """The deterministic cache is not keyed per user, so identical requests from
+    two users return the *same* comparison id. The second user is handed that
+    resource in full, so every follow-up call on the id must keep working —
+    otherwise GET, SSE and narration all 404 for exactly the request caching
+    exists to make free."""
+    a, b = two_clients
+    body = equal_weight_request(snapshot_sectors(a), ["fama_french"])
+
+    first = await a.post("/v1/comparisons", json=body)
+    assert first.status_code == 201, first.text
+    cid = first.json()["id"]
+
+    second = await b.post("/v1/comparisons", json=body)
+    assert second.status_code == 200
+    assert second.headers.get("X-Cache") == "hit"
+    assert second.json()["id"] == cid  # the same resource, by design
+
+    # ...and the second user can read it back rather than being 404'd.
+    reread = await b.get(f"/v1/comparisons/{cid}")
+    assert reread.status_code == 200, reread.text
+    assert reread.json()["id"] == cid
+
+
+async def test_a_user_who_never_received_a_comparison_still_cannot_read_it(
+    two_clients,
+):
+    """Access follows from having been served the resource, not from guessing
+    its id."""
+    a, b = two_clients
+    body = equal_weight_request(snapshot_sectors(a), ["fama_french"], horizon_months=60)
+    cid = (await a.post("/v1/comparisons", json=body)).json()["id"]
+
+    assert (await b.get(f"/v1/comparisons/{cid}")).status_code == 404

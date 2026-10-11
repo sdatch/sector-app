@@ -93,6 +93,8 @@ def _chunk_sizes(total: int, first: int, rest: int) -> list[int]:
 class MonteCarloEngine:
     model_id = ModelId.MONTE_CARLO
     model_version = "mc.1"
+    # Keep in step with MODEL_LABEL in frontend/lib/types.ts.
+    display_name = "Monte Carlo"
 
     def __init__(
         self,

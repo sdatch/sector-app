@@ -1,17 +1,13 @@
-import type {
-  ModelId,
-  OutcomeEnvelope,
-  RiskLevel,
-  SectorShift,
+import type { OutcomeEnvelope, RiskLevel, SectorShift } from "@/lib/types";
+import {
+  ACCENT,
+  MODEL_LABEL,
+  RISK_LEVEL_HINT,
+  RISK_LEVEL_LABEL,
 } from "@/lib/types";
-import { MODEL_LABEL, RISK_LEVEL_HINT, RISK_LEVEL_LABEL } from "@/lib/types";
 import { num, pct } from "@/lib/format";
-
-const ACCENT: Record<ModelId, string> = {
-  fama_french: "var(--ff)",
-  black_litterman: "var(--bl)",
-  monte_carlo: "var(--mc)",
-};
+import { moveDigits, type MoveDigits } from "@/lib/moves";
+import Delta from "./Delta";
 
 // Up to three sector shifts per model (engines/common/shifts.py). Each model
 // ranks the same candidates with its own moments, so the columns can disagree.
@@ -47,7 +43,7 @@ export default function SuggestedShifts({
             <div className="head">
               <span className="name">{MODEL_LABEL[env.model_id]}</span>
             </div>
-            <Column env={env} />
+            <Column env={env} riskLevel={riskLevel} />
           </div>
         ))}
       </div>
@@ -55,7 +51,7 @@ export default function SuggestedShifts({
   );
 }
 
-function Column({ env }: { env: OutcomeEnvelope }) {
+function Column({ env, riskLevel }: { env: OutcomeEnvelope; riskLevel: RiskLevel }) {
   if (env.status === "failed") {
     return <Note>This model failed to run, so it has no shifts.</Note>;
   }
@@ -67,21 +63,32 @@ function Column({ env }: { env: OutcomeEnvelope }) {
   if (env.outcome.suggested_shifts.length === 0) {
     return <Note>No shift raises the Sharpe ratio at this risk level.</Note>;
   }
+  // Shared precision across the column, widened only where the default would
+  // hide a real change or the ranking key's order (see lib/moves.ts). Easy mode
+  // renders the same shifts, so both views have to agree digit for digit.
+  const digits = moveDigits(env.outcome.suggested_shifts, riskLevel);
   return (
     <>
       {env.outcome.suggested_shifts.map((s) => (
-        <ShiftCard key={`${s.from_sector}->${s.to_sector}`} shift={s} />
+        <ShiftCard
+          key={`${s.from_sector}->${s.to_sector}`}
+          shift={s}
+          digits={digits}
+        />
       ))}
     </>
   );
 }
 
-function ShiftCard({ shift }: { shift: SectorShift }) {
+function ShiftCard({
+  shift,
+  digits,
+}: {
+  shift: SectorShift;
+  digits: MoveDigits;
+}) {
   const b = shift.metrics_before;
   const a = shift.metrics_after;
-  // Every shift raises Sharpe; add a digit when 2dp rounding would hide that.
-  const sharpeDigits =
-    num(b.sharpe_ratio) === num(a.sharpe_ratio) ? 3 : 2;
   return (
     <div
       style={{ padding: "0.7rem 0.9rem", borderTop: "1px solid var(--border)" }}
@@ -92,20 +99,20 @@ function ShiftCard({ shift }: { shift: SectorShift }) {
       </div>
       <Delta
         k="Sharpe"
-        before={num(b.sharpe_ratio, sharpeDigits)}
-        after={num(a.sharpe_ratio, sharpeDigits)}
+        before={num(b.sharpe_ratio, digits.sharpe)}
+        after={num(a.sharpe_ratio, digits.sharpe)}
         good={a.sharpe_ratio > b.sharpe_ratio}
       />
       <Delta
         k="Volatility"
-        before={pct(b.volatility)}
-        after={pct(a.volatility)}
+        before={pct(b.volatility, digits.vol)}
+        after={pct(a.volatility, digits.vol)}
         good={a.volatility < b.volatility}
       />
       <Delta
         k="Expected return"
-        before={pct(b.expected_return)}
-        after={pct(a.expected_return)}
+        before={pct(b.expected_return, digits.ret)}
+        after={pct(a.expected_return, digits.ret)}
         good={a.expected_return > b.expected_return}
       />
       {shift.warnings.includes("parametric_estimate") && (
@@ -118,30 +125,6 @@ function ShiftCard({ shift }: { shift: SectorShift }) {
           </span>
         </div>
       )}
-    </div>
-  );
-}
-
-function Delta({
-  k,
-  before,
-  after,
-  good,
-}: {
-  k: string;
-  before: string;
-  after: string;
-  good: boolean;
-}) {
-  return (
-    <div className="metric-row small" style={{ padding: "0.15rem 0", border: 0 }}>
-      <span className="k">{k}</span>
-      <span>
-        <span className="muted">{before}</span> →{" "}
-        <span className={before === after ? undefined : good ? "gain" : "loss"}>
-          {after}
-        </span>
-      </span>
     </div>
   );
 }

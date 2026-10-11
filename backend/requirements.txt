@@ -18,3 +18,9 @@ asyncpg>=0.29
 alembic>=1.13
 fastapi-users[sqlalchemy]>=13.0
 argon2-cffi>=23.1
+
+# Narration only (app/narration/). The feature is off by default and the import
+# is lazy, so the app runs without this installed; it is declared here so that
+# enabling NARRATION_ENABLED is purely an environment change.
+# 1.x is built on httpx2, which coexists with the httpx above — don't merge them.
+anthropic>=1.13,<2

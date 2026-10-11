@@ -91,6 +91,21 @@ async def client():
 
 
 @pytest.fixture
+async def two_clients():
+    """Two verified users on the *same* app, for cross-user behaviour (the
+    comparison cache is deterministic and not keyed per user)."""
+    app = await _bootstrap_app()
+    async with app.router.lifespan_context(app):
+        a = await _make_client(app, verify=True)
+        b = await _make_client(app, verify=True)
+        try:
+            yield a, b
+        finally:
+            await a.aclose()
+            await b.aclose()
+
+
+@pytest.fixture
 async def unverified_client():
     app = await _bootstrap_app()
     async with app.router.lifespan_context(app):
