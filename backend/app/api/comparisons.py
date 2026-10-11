@@ -109,6 +109,10 @@ async def create_comparison(
 
     cached = manager.cache_lookup(body)
     if cached is not None:  # cache hits are exempt from rate limiting (§8)
+        # The cache is not per-user, so this may be another user's comparison
+        # id. Record that we served it, or every follow-up call on that id
+        # (GET, SSE, narration) would 404 for the user holding it.
+        manager.grant_access(str(cached.id), str(user.id))
         response.status_code = 200
         response.headers["X-Cache"] = "hit"
         return cached
@@ -130,6 +134,7 @@ async def create_comparison(
         raise HTTPException(status_code=422, detail=str(exc)) from exc
 
     if cache_hit:
+        manager.grant_access(str(resource.id), str(user.id))
         response.status_code = 200
         response.headers["X-Cache"] = "hit"
     else:
@@ -146,6 +151,34 @@ def _require_owned(manager, comparison_id: str, user: User) -> ComparisonResourc
         # 404 (not 403) so existence of others' comparisons isn't leaked.
         raise HTTPException(status_code=404, detail="comparison_not_found")
     return resource
+
+
+async def load_owned_comparison(
+    comparison_id: str, request: Request, user: User, session: AsyncSession
+) -> tuple[ComparisonResource, str]:
+    """A comparison the user may read, plus its cache key.
+
+    The same two-tier lookup `get_comparison` performs — live in-memory state
+    first, then the durable row so comparisons outlive eviction (U8) — factored
+    out because narration needs exactly this and must not reimplement either
+    the fallback or the 404-not-403 rule.
+    """
+    manager = request.app.state.manager
+    state = manager.get_state(comparison_id)
+    if state is not None:
+        resource = _require_owned(manager, comparison_id, user)
+        return resource, state.cache_key
+
+    try:
+        cid = uuid.UUID(comparison_id)
+    except ValueError:
+        raise HTTPException(status_code=404, detail="comparison_not_found")
+    row = await get_comparison_row(
+        session, user.id, cid, datetime.now(timezone.utc)
+    )
+    if row is None or row.result is None:
+        raise HTTPException(status_code=404, detail="comparison_not_found")
+    return ComparisonResource.model_validate(row.result), row.cache_key
 
 
 @router.get("/comparisons", response_model=list[ComparisonSummary])

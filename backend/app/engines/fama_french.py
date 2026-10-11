@@ -35,6 +35,8 @@ from .common.normalize import (
 class FamaFrenchEngine:
     model_id = ModelId.FAMA_FRENCH
     model_version = "ff5.1"
+    # Keep in step with MODEL_LABEL in frontend/lib/types.ts.
+    display_name = "Fama-French 5-Factor"
 
     async def evaluate(
         self, ctx: EvaluationContext

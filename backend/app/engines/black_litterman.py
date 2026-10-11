@@ -40,6 +40,8 @@ _TAU = 0.05  # uncertainty scaling on the equilibrium prior
 class BlackLittermanEngine:
     model_id = ModelId.BLACK_LITTERMAN
     model_version = "bl.1"
+    # Keep in step with MODEL_LABEL in frontend/lib/types.ts.
+    display_name = "Black-Litterman"
 
     async def evaluate(
         self, ctx: EvaluationContext

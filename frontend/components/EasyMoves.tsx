@@ -29,6 +29,7 @@ export default function EasyMoves({
   stale?: boolean;
 }) {
   const env = outcomes.find((o) => o.model_id === model);
+  const narrated = Boolean(narration && Object.keys(narration).length > 0);
 
   return (
     <div className="card" style={{ ["--accent" as any]: ACCENT[model] }}>
@@ -55,6 +56,19 @@ export default function EasyMoves({
           </button>
         ))}
       </div>
+
+      {narrated && (
+        // Disclosure, not a credit line. An operator flag is not consent: if
+        // the wording came from Claude, the reader is told so, and told what
+        // was sent to get it (PRD NFR-3).
+        <p className="muted small" style={{ marginTop: "0.6rem" }}>
+          <strong>Wording by Claude.</strong> The moves, the ranking and every
+          figure here are computed by the model named above — Claude only writes
+          the explanations, from those figures. Producing them sends your sector
+          weights and the figures to Anthropic. It never sends your holdings:
+          no tickers, no quantities, no account value.
+        </p>
+      )}
 
       <div style={{ marginTop: "0.6rem", opacity: stale ? 0.5 : 1 }}>
         {env ? (
@@ -178,11 +192,6 @@ function Move({
             estimate
           </span>
         </div>
-      )}
-      {text && (
-        <p className="muted small" style={{ marginTop: "0.4rem" }}>
-          Wording written by Claude from the figures above.
-        </p>
       )}
     </div>
   );

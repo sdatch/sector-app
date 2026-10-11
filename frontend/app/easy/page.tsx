@@ -4,6 +4,7 @@ import { Suspense, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import {
+  getNarration,
   getPortfolioAllocation,
   listPortfolios,
   type PortfolioAllocation,
@@ -37,6 +38,10 @@ function EasyInner() {
   const [model, setModel] = useState<ModelId>("black_litterman");
   const [riskLevel, setRiskLevel] = useState<RiskLevel>(DEFAULT_RISK_LEVEL);
   const [allocation, setAllocation] = useState<PortfolioAllocation | null>(null);
+  // moveKey -> Claude-written sentence, when the optional layer is enabled.
+  const [narration, setNarration] = useState<Record<string, string> | null>(
+    null,
+  );
 
   const live = useLiveComparison();
   // run() clears its resource before the next POST lands, so hold the last
@@ -98,6 +103,36 @@ function EasyInner() {
     ? null
     : live.resource?.outcomes ?? lastOutcomes.current;
   const stale = !live.resource && outcomes !== null;
+
+  // Optional narration, fetched only once the comparison and the chosen
+  // model's outcome exist. It arrives after first paint and replaces the
+  // deterministic copy in place, the way the Monte Carlo column already
+  // refines — the page is complete without it, so there is no spinner and no
+  // error state. A backend with the flag off answers `template`, which is the
+  // same shape a failure produces, so nothing here branches on either.
+  const comparisonId = live.resource?.id ?? null;
+  const settled =
+    live.resource?.outcomes.find((o) => o.model_id === model)?.outcome != null;
+  useEffect(() => {
+    setNarration(null);
+    if (!comparisonId || !settled) return;
+    let cancelled = false;
+    getNarration(comparisonId, model)
+      .then((res) => {
+        if (cancelled || res.source !== "claude") return;
+        setNarration(
+          Object.fromEntries(
+            res.moves.map((m) => [`${m.from_sector}->${m.to_sector}`, m.text]),
+          ),
+        );
+      })
+      .catch(() => {
+        /* cosmetic: the template copy already on screen stands */
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [comparisonId, model, settled]);
   const horizonYears = useMemo(
     () => Math.round(DEFAULT_HORIZON_MONTHS / 12),
     [],
@@ -178,6 +213,7 @@ function EasyInner() {
           model={model}
           onModelChange={setModel}
           riskLevel={riskLevel}
+          narration={narration}
           stale={stale}
         />
       ) : (

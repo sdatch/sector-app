@@ -60,6 +60,30 @@ class Settings(BaseSettings):
     maintenance_interval_s: int = 24 * 3600
     run_maintenance_on_startup: bool = True
 
+    # --- Narration (optional LLM explanation layer; OFF by default) ---
+    # The math always decides which moves are shown and what every number is;
+    # narration only rewrites the sentence explaining a move. Off means the
+    # client renders its own deterministic copy and nothing leaves the process.
+    # Turning this on sends sector names, weights and the computed deltas to
+    # Anthropic — never tickers, quantities or user identity — so it also
+    # requires the user-facing disclosure the UI renders (PRD NFR-3, §13).
+    narration_enabled: bool = False
+    anthropic_api_key: str | None = None
+    narration_model: str = "claude-opus-5"
+    narration_effort: str = "low"  # output_config.effort — 3 sentences
+    # Adaptive thinking is on by default and its tokens count against this, so a
+    # tight cap yields stop_reason="max_tokens", which the validator rejects —
+    # i.e. permanent fallback. Keep headroom; the visible output stays short.
+    narration_max_tokens: int = 3072
+    narration_timeout_s: float = 8.0
+    narration_per_minute: int = 5  # per user, its own limiter
+    narration_cache_size: int = 256
+    # Dev/QA only, ignored in production: narrate from a local stub instead of
+    # calling the API, so the narrated UI (including its disclosure line) can be
+    # reviewed without a key and without spend. Same spirit as the dev
+    # verification-token route in auth/dev.py.
+    narration_stub: bool = False
+
     @property
     def is_production(self) -> bool:
         return self.environment == "production"

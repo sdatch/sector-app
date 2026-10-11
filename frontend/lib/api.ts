@@ -5,6 +5,7 @@ import type {
   DataSnapshot,
   IngestReport,
   Me,
+  ModelId,
   Portfolio,
   SectorWeight,
 } from "./types";
@@ -137,6 +138,28 @@ export const createComparison = (req: CompareRequest) =>
 
 export const getComparison = (id: string) =>
   api<ComparisonResource>(`/v1/comparisons/${id}`);
+
+// Optional plain-language wording for a model's suggested shifts. The backend
+// decides nothing about *which* moves exist — it only rewrites the sentence.
+// `source: "template"` with an empty `moves` means "render your own copy"
+// (lib/moves.ts), which is also exactly what a flag-off backend returns, so
+// there is no failure case for a caller to handle.
+export interface NarratedMove {
+  from_sector: string;
+  to_sector: string;
+  text: string;
+}
+export interface NarrationResponse {
+  model_id: ModelId;
+  source: "claude" | "template";
+  moves: NarratedMove[];
+  prompt_version: string | null;
+}
+export const getNarration = (comparisonId: string, model_id: ModelId) =>
+  api<NarrationResponse>(`/v1/comparisons/${comparisonId}/narration`, {
+    method: "POST",
+    json: { model_id },
+  });
 
 export interface ComparisonSummary {
   id: string;

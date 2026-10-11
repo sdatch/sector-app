@@ -76,7 +76,7 @@ to parametric ones as `n_simulations → ∞` (a property test).
 ## Status: all milestones (M1–M5) complete
 
 The full PRD v1 is built and running in `docker compose` (frontend :3000,
-backend :8000, Postgres :5432); 74 backend tests green. Remaining before a real
+backend :8000, Postgres :5432); 125 backend tests green. Remaining before a real
 launch: a mail provider (verification tokens are logged today), user-facing
 manual QA, and final disclaimer-copy review (PRD §13).
 
@@ -84,7 +84,8 @@ manual QA, and final disclaimer-copy review (PRD §13).
 pages; an ingestion overhaul so real broker exports resolve instead of arriving
 mostly rejected; fund decomposition, so a portfolio of index funds gets a real
 sector mix; a snapshot-artifact fingerprint that stops stale reference data
-being served forever; and `/easy`, a one-model, three-move front door.
+being served forever; `/easy`, a one-model, three-move front door; and an
+optional, off-by-default Claude narration layer for the moves it suggests.
 
 ## Milestone status
 
@@ -229,12 +230,69 @@ is what keeps NFR-2 determinism and `tests/golden/` untouched.
   three. That disagreement *is* the lesson, surfaced to a user who never opened
   the comparison view.
 
-A planned-but-unbuilt follow-up: an optional Claude narration layer, env-gated
-and off by default, that rewrites the move explanations. The split is
-load-bearing — **the math decides, the LLM only narrates** — because an LLM
-cannot pick or score a move without breaking NFR-2 determinism and NFR-5
-traceability, and sending portfolio contents to a third party needs an explicit
-user-facing disclosure, not just an operator flag (NFR-3).
+## Narration (`backend/app/narration/`, off by default)
+
+Optional Claude-written wording for the three moves. The split is load-bearing:
+**the math decides, the model only narrates.** `shifts.py` chooses which moves
+appear and computes every number on them, and nothing in this package can
+change either — an LLM that picked or scored a move would break NFR-2
+determinism (guarded by `tests/golden/`) and NFR-5 traceability.
+
+`NARRATION_ENABLED=false` is the default. With it off the SDK is never
+imported, no request leaves the process, and the client renders its own
+deterministic copy, so the feature is complete without any of this. The
+frontend still issues the narration POST and the server answers `template` —
+one source of truth for whether the layer is on, at the cost of one cheap
+request per view.
+
+| File | Responsibility |
+|---|---|
+| `payload.py` | What may leave the process — **the privacy boundary** |
+| `prompt.py` | The versioned prompt (`PROMPT_VERSION` is in the cache key) |
+| `schema.py` | What the model returns: prose only, never a metric |
+| `validate.py` | Checking prose against the figures — **the honesty boundary** |
+| `client.py` | The only network call |
+| `cache.py` | In-process LRU, keyed on comparison + model + prompt version |
+| `service.py` | cache → payload → client → validate → fallback |
+
+- **Privacy is structural, not a promise.** `build_payload` takes a display
+  name, a risk level, `SectorAttribution` and `SectorShift` — never a
+  `ModelOutcome`, `CompareRequest`, `Portfolio` or `User` — so a ticker or a
+  quantity has no field to travel in. Current weights come from
+  `sector_attribution`, *not* `request.allocation`, whose `ticker_weights` mode
+  carries real tickers. `var_horizon`/`cvar_horizon` are excluded: they are
+  currency amounts derived from `initial_value`. Both payload models are
+  `extra="forbid"`, and a test freezes their field sets so a new field fails CI.
+- **Numbers are pre-formatted and validated numerically.** The model is given
+  display strings plus the deltas and told to quote them; the validator parses
+  numeric tokens and compares on absolute value, so "16.3%" and "16.30%" are
+  one claim while an invented figure fails whatever its formatting. It also
+  rejects foreign sectors, ticker-shaped tokens, buy/sell/hold language,
+  spelled-out quantities, and any reply whose shape does not match the moves
+  exactly. One bad move rejects the whole set — never generated prose beside
+  template prose. `order`, bare `short` and `will` are deliberately *not*
+  policed (false rejections make the layer look broken); the prompt steers away
+  from `will` instead.
+- **Degradation is the only failure mode.** Flag off, no key, timeout, API
+  error, refusal, `max_tokens`, or any validator rejection all return
+  `200 {source: "template", moves: []}` — the same shape — so no client branch
+  exists. 404 means not yours or not there, 409 not ready, 429 slow down.
+- `display_name` on the engine protocol is the invariant-3 carve-out: good copy
+  wants to name the model, and the API layer may not, so the string lives in
+  `engines/` and narration reads it from the registry.
+- **Disclosure is part of the feature.** An env flag is an operator switch and
+  NFR-3 is a promise to users, so narrated moves carry a visible line naming
+  Claude and stating what is sent, and PRD §13 copy says the same.
+- Not cached in SQL: narration is cosmetic, and a JSONB column would make
+  generated prose part of the 90-day record. The cost is that a reopened
+  comparison may be narrated again with different wording.
+
+Tests use a fake on `app.state.narration_client` — no network, no key. A guard
+test asserts `anthropic` is not in `sys.modules` after importing `app.main`.
+**Untested against live output:** no API key was available when this was built,
+so the prompt-plus-validator pairing has only been exercised against
+hand-written realistic prose. Watch the `narration rejected:` warning rate the
+first time the flag is turned on.
 
 ## Snapshot staleness (load-bearing)
 

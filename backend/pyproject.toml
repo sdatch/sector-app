@@ -22,6 +22,11 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
+# Optional LLM narration (app/narration/). Off by default; the SDK import is
+# lazy, so the app and its tests run without this installed.
+narration = [
+    "anthropic>=1.13,<2",
+]
 dev = [
     "pytest>=8.3",
     "pytest-asyncio>=0.24",
