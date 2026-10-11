@@ -93,3 +93,22 @@ class PortfolioRead(BaseModel):
     is_default: bool
     created_at: datetime
     positions: list[PositionRead]
+
+
+class AllocationRead(BaseModel):
+    """A stored portfolio resolved against the active snapshot — the read-only
+    view of service.ResolvedAllocation.
+
+    `sector_weights` sums to 1.0 over the *modelable equity sleeve*;
+    `unmodeled_share` is the fraction of portfolio value that sleeve leaves out
+    (the fixed-income side of a balanced fund, bullion, commodity funds), and
+    `approximations` is what fund decomposition is fudging. The comparison path
+    consumes only the weights, so a caller that wants to tell the user which
+    part of their money the numbers cover asks here.
+    """
+
+    portfolio_id: uuid.UUID
+    snapshot_id: str
+    sector_weights: list[SectorWeight]
+    unmodeled_share: float = 0.0
+    approximations: list[str] = Field(default_factory=list)

@@ -77,12 +77,20 @@ export default function PortfoliosPage() {
                   <td className="muted">{p.source}</td>
                   <td className="num">{p.positions.length}</td>
                   <td>
-                    <button
-                      className="btn small"
-                      onClick={() => router.push(`/compare?portfolio=${p.id}`)}
-                    >
-                      Compare
-                    </button>
+                    <div className="row" style={{ gap: "0.35rem" }}>
+                      <button
+                        className="btn small"
+                        onClick={() => router.push(`/easy?portfolio=${p.id}`)}
+                      >
+                        3 moves
+                      </button>
+                      <button
+                        className="btn small"
+                        onClick={() => router.push(`/compare?portfolio=${p.id}`)}
+                      >
+                        Compare
+                      </button>
+                    </div>
                   </td>
                   <td>
                     <button

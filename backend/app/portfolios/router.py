@@ -4,6 +4,7 @@
   POST /v1/portfolios           {name, accepted|sector_weights} -> 201 Portfolio
   GET  /v1/portfolios           list
   GET  /v1/portfolios/{id}      one
+  GET  /v1/portfolios/{id}/allocation  sector mix under the active snapshot
   DELETE /v1/portfolios/{id}    remove
 """
 
@@ -28,8 +29,15 @@ from app.db.models import User
 
 from app.progress.service import store_trajectory
 
+from app.contracts.comparison import SectorWeight
+
 from .ingest import IngestError, parse_csv
-from .schemas import IngestReport, PortfolioCreate, PortfolioRead
+from .schemas import (
+    AllocationRead,
+    IngestReport,
+    PortfolioCreate,
+    PortfolioRead,
+)
 from .service import (
     PortfolioConflict,
     PortfolioValidationError,
@@ -37,6 +45,7 @@ from .service import (
     delete_portfolio,
     get_portfolio,
     list_portfolios,
+    resolve_allocation,
 )
 
 router = APIRouter(prefix="/v1/portfolios", tags=["portfolios"])
@@ -131,6 +140,40 @@ async def get_one(
     if portfolio is None:
         raise HTTPException(status_code=404, detail="portfolio_not_found")
     return _to_read(portfolio)
+
+
+@router.get("/{portfolio_id}/allocation", response_model=AllocationRead)
+async def get_allocation(
+    portfolio_id: uuid.UUID,
+    request: Request,
+    user: User = Depends(current_active_user),
+    session: AsyncSession = Depends(get_async_session),
+) -> AllocationRead:
+    """The portfolio's sector mix under the active snapshot, plus what the mix
+    leaves out. Funds are decomposed at evaluation time, so this is a property
+    of (portfolio, snapshot) rather than of any saved comparison — which is why
+    it lives here and not on ComparisonResource."""
+    portfolio = await get_portfolio(session, user.id, portfolio_id)
+    if portfolio is None:
+        raise HTTPException(status_code=404, detail="portfolio_not_found")
+    bundle = _bundle(request)
+    resolved = resolve_allocation(
+        portfolio, bundle.ticker_price, bundle.fund_composition
+    )
+    if not resolved:
+        # Same vocabulary the comparison path uses for this case.
+        raise HTTPException(status_code=422, detail="portfolio_not_priceable")
+    return AllocationRead(
+        portfolio_id=portfolio.id,
+        snapshot_id=bundle.snapshot_id,
+        # Sorted so the response is deterministic for a given snapshot.
+        sector_weights=[
+            SectorWeight(sector=s, weight=w)
+            for s, w in sorted(resolved.weights.items())
+        ],
+        unmodeled_share=resolved.unmodeled_share,
+        approximations=list(resolved.approximations),
+    )
 
 
 @router.delete("/{portfolio_id}", status_code=204)

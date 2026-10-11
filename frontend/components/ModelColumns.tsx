@@ -1,12 +1,6 @@
-import type { ModelId, OutcomeEnvelope } from "@/lib/types";
-import { MODEL_LABEL } from "@/lib/types";
+import type { OutcomeEnvelope } from "@/lib/types";
+import { ACCENT, MODEL_LABEL } from "@/lib/types";
 import { money, pct, num } from "@/lib/format";
-
-const ACCENT: Record<ModelId, string> = {
-  fama_french: "var(--ff)",
-  black_litterman: "var(--bl)",
-  monte_carlo: "var(--mc)",
-};
 
 function isProvisional(env: OutcomeEnvelope): boolean {
   return (

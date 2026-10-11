@@ -15,6 +15,8 @@ export default function Nav() {
       </Link>
       {me && (
         <>
+          {/* The low-ceremony front door: one model, three moves. */}
+          <Link href="/easy">Easy mode</Link>
           <Link href="/portfolios">Portfolios</Link>
           <Link href="/compare">Compare</Link>
           <Link href="/progress">Progress</Link>

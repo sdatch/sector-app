@@ -1,5 +1,5 @@
-import type { ComparisonResource, ModelId } from "@/lib/types";
-import { MODEL_LABEL } from "@/lib/types";
+import type { ComparisonResource } from "@/lib/types";
+import { ACCENT, MODEL_LABEL } from "@/lib/types";
 import { money } from "@/lib/format";
 import { DisclaimerInline } from "./Disclaimer";
 import ModelColumns from "./ModelColumns";
@@ -7,12 +7,6 @@ import AttributionChart from "./AttributionChart";
 import AdviceDelta from "./AdviceDelta";
 import SuggestedShifts from "./SuggestedShifts";
 import CaveatsPanel from "./CaveatsPanel";
-
-const ACCENT: Record<ModelId, string> = {
-  fama_french: "var(--ff)",
-  black_litterman: "var(--bl)",
-  monte_carlo: "var(--mc)",
-};
 
 export default function ComparisonView({
   resource,

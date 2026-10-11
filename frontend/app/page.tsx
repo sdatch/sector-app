@@ -21,7 +21,10 @@ export default function Home() {
         <div className="row" style={{ marginTop: "1rem" }}>
           {loading ? null : me ? (
             <>
-              <Link href="/compare" className="btn primary">
+              <Link href="/easy" className="btn primary">
+                Show me three moves
+              </Link>
+              <Link href="/compare" className="btn">
                 Run a comparison
               </Link>
               <Link href="/portfolios" className="btn">

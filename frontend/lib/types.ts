@@ -29,11 +29,27 @@ export const MODEL_LABEL: Record<ModelId, string> = {
   monte_carlo: "Monte Carlo",
 };
 
+// Per-model accent, consumed as the `--accent` custom property by .model-col,
+// .learn-card and friends in globals.css.
+export const ACCENT: Record<ModelId, string> = {
+  fama_french: "var(--ff)",
+  black_litterman: "var(--bl)",
+  monte_carlo: "var(--mc)",
+};
+
 export const ALL_MODELS: ModelId[] = [
   "fama_french",
   "black_litterman",
   "monte_carlo",
 ];
+
+// Shared request defaults. /easy and /compare must agree on these or they land
+// on different cache entries for the same question: the key is
+// sha256(snapshot_id + canonical_json(request)) over the *fully defaulted*
+// model (backend orchestration/cache.py), so an omitted field still counts.
+export const DEFAULT_HORIZON_MONTHS = 120;
+export const DEFAULT_N_SIMULATIONS = 10000;
+export const DEFAULT_RISK_LEVEL: RiskLevel = "moderate";
 
 // GICS 11 — the snapshot universe (matches backend synthetic provider).
 export const SECTORS: string[] = [

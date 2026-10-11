@@ -6,6 +6,7 @@ import type {
   IngestReport,
   Me,
   Portfolio,
+  SectorWeight,
 } from "./types";
 
 export const API_BASE =
@@ -87,6 +88,19 @@ export const getPortfolio = (id: string) =>
   api<Portfolio>(`/v1/portfolios/${id}`);
 export const deletePortfolio = (id: string) =>
   api<void>(`/v1/portfolios/${id}`, { method: "DELETE" });
+
+// The portfolio's sector mix under the active snapshot, plus what it leaves
+// out: funds are decomposed at evaluation time, so a 60/40 fund reports a
+// 0.4 unmodeled_share rather than quietly inflating the equity weights.
+export interface PortfolioAllocation {
+  portfolio_id: string;
+  snapshot_id: string;
+  sector_weights: SectorWeight[];
+  unmodeled_share: number;
+  approximations: string[];
+}
+export const getPortfolioAllocation = (id: string) =>
+  api<PortfolioAllocation>(`/v1/portfolios/${id}/allocation`);
 
 export const previewCsv = (file: File) => {
   const form = new FormData();

@@ -76,15 +76,15 @@ to parametric ones as `n_simulations → ∞` (a property test).
 ## Status: all milestones (M1–M5) complete
 
 The full PRD v1 is built and running in `docker compose` (frontend :3000,
-backend :8000, Postgres :5432); 55 backend tests green. Remaining before a real
+backend :8000, Postgres :5432); 74 backend tests green. Remaining before a real
 launch: a mail provider (verification tokens are logged today), user-facing
 manual QA, and final disclaimer-copy review (PRD §13).
 
 **Post-v1 additions** (see the sections below): `/learn` educational content
 pages; an ingestion overhaul so real broker exports resolve instead of arriving
 mostly rejected; fund decomposition, so a portfolio of index funds gets a real
-sector mix; and a snapshot-artifact fingerprint that stops stale reference data
-being served forever.
+sector mix; a snapshot-artifact fingerprint that stops stale reference data
+being served forever; and `/easy`, a one-model, three-move front door.
 
 ## Milestone status
 
@@ -195,6 +195,46 @@ sector shifts, never tickers (PRD non-goal), and the copy never says buy or sell
 - `suggested_shifts` is `None` on comparisons saved before the field existed
   (the UI says "not computed"); `[]` means nothing qualified. Additive to schema
   1.1, no migration. Keep `/learn/why-models-disagree` in sync with the constants.
+
+## Easy mode (`/easy`)
+
+The low-ceremony front door, for the user who wants to know what to *do* rather
+than to study three columns: pick a portfolio, pick one model, pick a risk
+level, read three sector moves in plain language. It **computes nothing of its
+own** — it renders the `suggested_shifts` the comparison already returns, which
+is what keeps NFR-2 determinism and `tests/golden/` untouched.
+
+- It POSTs **all three** models with `/compare`'s exact defaults (horizon 120,
+  10 000 paths, no views) so the two pages share a cache entry, then renders one
+  column. Switching model is a re-render, not a request; switching risk level or
+  portfolio re-POSTs, because `risk_level` is both a cache-key field and the
+  shift ranking key. The defaults live in `frontend/lib/types.ts` and both pages
+  import them — diverging on any of them silently doubles the compute.
+- `frontend/lib/moves.ts` writes the copy from the numbers on the shift and
+  nothing else, so prose and deltas cannot disagree. It leads with whatever the
+  risk level actually ranks by, always names the other side of the trade-off,
+  and never says buy/sell/hold/trade (PRD §3 non-goal).
+- `moveDigits` decides display precision once per list, widening a figure whose
+  own before/after collapses ("volatility falls from 16.3% to 16.3%" reads as a
+  bug) and widening the *ranking key* when ties make the order look arbitrary.
+  `SuggestedShifts` uses the same function — the two views render the same
+  shifts and must agree digit for digit.
+- `GET /v1/portfolios/{id}/allocation` exposes `unmodeled_share` +
+  `approximations`, which the comparison path resolves and discards. Without it
+  a 60/40 fund holder would read three moves about 60% of their money with no
+  notice. It is a property of (portfolio, snapshot), not of a comparison, which
+  is why it is not on `ComparisonResource`.
+- An empty list is a real answer and says so: Black-Litterman finds no
+  qualifying shift on its own optimal allocation while the other two still offer
+  three. That disagreement *is* the lesson, surfaced to a user who never opened
+  the comparison view.
+
+A planned-but-unbuilt follow-up: an optional Claude narration layer, env-gated
+and off by default, that rewrites the move explanations. The split is
+load-bearing — **the math decides, the LLM only narrates** — because an LLM
+cannot pick or score a move without breaking NFR-2 determinism and NFR-5
+traceability, and sending portfolio contents to a third party needs an explicit
+user-facing disclosure, not just an operator flag (NFR-3).
 
 ## Snapshot staleness (load-bearing)
 
