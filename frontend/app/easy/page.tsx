@@ -40,7 +40,9 @@ function EasyInner() {
 
   const live = useLiveComparison();
   // run() clears its resource before the next POST lands, so hold the last
-  // outcomes and show them dimmed instead of flashing an empty card.
+  // outcomes and show them dimmed instead of flashing an empty card. Only
+  // valid while the *same* portfolio is in view — another portfolio's moves
+  // are not a loading state, they are the wrong answer.
   const lastOutcomes = useRef<OutcomeEnvelope[] | null>(null);
   if (live.resource) lastOutcomes.current = live.resource.outcomes;
 
@@ -65,6 +67,12 @@ function EasyInner() {
   // Auto-run: easy mode lands the user on an answer, not a form. Re-runs when
   // the portfolio or the risk level changes — the risk level is part of the
   // cache key and of how shifts are ranked. Changing model is render-only.
+  // Switching portfolio invalidates the held outcomes outright; switching risk
+  // level does not, since the same portfolio is simply being re-ranked.
+  useEffect(() => {
+    lastOutcomes.current = null;
+  }, [portfolioId]);
+
   useEffect(() => {
     if (!portfolioId) return;
     setAllocation(null);
@@ -84,7 +92,11 @@ function EasyInner() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [portfolioId, riskLevel]);
 
-  const outcomes = live.resource?.outcomes ?? lastOutcomes.current;
+  // A failed run shows its error and nothing else: held outcomes are a loading
+  // affordance, never a fallback for a request that did not succeed.
+  const outcomes = live.error
+    ? null
+    : live.resource?.outcomes ?? lastOutcomes.current;
   const stale = !live.resource && outcomes !== null;
   const horizonYears = useMemo(
     () => Math.round(DEFAULT_HORIZON_MONTHS / 12),
