@@ -84,6 +84,29 @@ class Settings(BaseSettings):
     # verification-token route in auth/dev.py.
     narration_stub: bool = False
 
+    # --- Sector lookup (optional suggested sectors in the CSV preview; OFF) ---
+    # The lookup proposes, the user confirms, the stored row is truth: nothing
+    # here can put a sector into a portfolio without a person saying yes, and
+    # nothing here ever runs during a comparison. Turning it on sends the
+    # *ticker symbols* of an uploaded file to Anthropic when the user clicks
+    # "check sectors" — never quantities, values, the file, or user identity —
+    # and the UI discloses that beside the button (PRD NFR-3, §13). Reuses
+    # anthropic_api_key above.
+    sector_lookup_enabled: bool = False
+    sector_lookup_model: str = "claude-opus-5-5"
+    sector_lookup_effort: str = "medium"
+    # Web searches the model may run per request, for tickers it cannot place
+    # from its own knowledge (recent listings, renames, small caps).
+    sector_lookup_max_searches: int = 5
+    sector_lookup_max_tokens: int = 16_000
+    sector_lookup_timeout_s: float = 60.0  # web search makes this slow
+    sector_lookup_per_minute: int = 3  # per user; cache hits are exempt
+    sector_lookup_max_tickers: int = 100  # per request
+    sector_lookup_batch_size: int = 25  # tickers per model call
+    sector_lookup_cache_size: int = 2048  # per-ticker entries
+    # Dev/QA only, ignored in production — same spirit as narration_stub.
+    sector_lookup_stub: bool = False
+
     @property
     def is_production(self) -> bool:
         return self.environment == "production"

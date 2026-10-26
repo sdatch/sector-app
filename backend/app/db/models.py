@@ -92,6 +92,10 @@ class Position(Base):
     ticker: Mapped[str] = mapped_column(String(16), primary_key=True)
     quantity: Mapped[float] = mapped_column(Numeric(18, 6), nullable=False)
     sector: Mapped[str] = mapped_column(Text, nullable=False)
+    # Who chose `sector`: NULL = the reference table, "model" = a lookup
+    # suggestion the user accepted, "user" = picked by hand. Provenance only;
+    # evaluation reads `sector` alone.
+    sector_source: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     portfolio: Mapped[Portfolio] = relationship(back_populates="positions")
 

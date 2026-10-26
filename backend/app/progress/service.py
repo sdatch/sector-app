@@ -31,7 +31,7 @@ def _weights_vector(portfolio: Portfolio, bundle: SnapshotBundle) -> np.ndarray:
     idx = {s: i for i, s in enumerate(sectors)}
     w = np.zeros(len(sectors))
     weights = portfolio_sector_weights(
-        portfolio, bundle.ticker_price, bundle.fund_composition
+        portfolio, bundle.ticker_price, bundle.fund_composition, bundle.price_of
     )
     for sector, weight in weights.items():
         if sector in idx:
@@ -44,7 +44,7 @@ def _current_value(portfolio: Portfolio, bundle: SnapshotBundle) -> float:
         return 100_000.0  # nominal base for weight-only portfolios
     total = 0.0
     for p in portfolio.positions:
-        total += float(p.quantity) * bundle.ticker_price.get(p.ticker, 0.0)
+        total += float(p.quantity) * (bundle.price_of(p.ticker) or 0.0)
     return total or 100_000.0
 
 

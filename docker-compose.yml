@@ -41,6 +41,12 @@ services:
       # ignored when ENVIRONMENT=production.
       NARRATION_ENABLED: ${NARRATION_ENABLED:-false}
       NARRATION_STUB: ${NARRATION_STUB:-false}
+      # Optional sector lookup in the CSV preview, same pattern:
+      #   SECTOR_LOOKUP_ENABLED=true SECTOR_LOOKUP_STUB=true docker compose up -d backend
+      SECTOR_LOOKUP_ENABLED: ${SECTOR_LOOKUP_ENABLED:-false}
+      SECTOR_LOOKUP_STUB: ${SECTOR_LOOKUP_STUB:-false}
+      # The key is read from your shell or from a .env file next to this one
+      # (gitignored). Never write the key itself into this file.
       ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
     ports:
       - "8000:8000"

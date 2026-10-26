@@ -7,6 +7,8 @@ import type {
   Me,
   ModelId,
   Portfolio,
+  SectorLookupResponse,
+  SectorOverride,
   SectorWeight,
 } from "./types";
 
@@ -103,9 +105,17 @@ export interface PortfolioAllocation {
 export const getPortfolioAllocation = (id: string) =>
   api<PortfolioAllocation>(`/v1/portfolios/${id}/allocation`);
 
-export const previewCsv = (file: File) => {
+// Re-previewing the same file with the sectors the user has confirmed keeps
+// weights and coverage server-computed; the client never does weight math.
+export const previewCsv = (
+  file: File,
+  overrides: Record<string, SectorOverride> = {},
+) => {
   const form = new FormData();
   form.append("file", file);
+  if (Object.keys(overrides).length > 0) {
+    form.append("sector_overrides", JSON.stringify(overrides));
+  }
   return api<IngestReport>("/v1/portfolios/preview", {
     method: "POST",
     body: form,
@@ -114,12 +124,28 @@ export const previewCsv = (file: File) => {
 
 export const createPortfolioFromCsv = (
   name: string,
-  accepted: { ticker: string; quantity: number }[],
+  accepted: {
+    ticker: string;
+    quantity: number;
+    sector?: string;
+    sector_source?: "model" | "user";
+  }[],
   is_default = false,
 ) =>
   api<Portfolio>("/v1/portfolios", {
     method: "POST",
     json: { name, accepted, is_default },
+  });
+
+// Optional sector lookup. Sends ticker symbols only, on an explicit click.
+export const sectorLookupAvailable = () =>
+  api<{ available: boolean; max_tickers: number }>(
+    "/v1/portfolios/sector-lookup",
+  );
+export const lookupSectors = (tickers: string[]) =>
+  api<SectorLookupResponse>("/v1/portfolios/sector-lookup", {
+    method: "POST",
+    json: { tickers },
   });
 
 export const createPortfolioManual = (

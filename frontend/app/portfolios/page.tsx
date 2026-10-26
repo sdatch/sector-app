@@ -8,7 +8,9 @@ import {
   createPortfolioManual,
   deletePortfolio,
   listPortfolios,
+  lookupSectors,
   previewCsv,
+  sectorLookupAvailable,
 } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import type {
@@ -16,6 +18,8 @@ import type {
   IngestRejected,
   IngestReport,
   Portfolio,
+  SectorOverride,
+  SectorSuggestion,
 } from "@/lib/types";
 import { BENIGN_REASONS, REJECT_REASON, SECTORS } from "@/lib/types";
 import { money, pct } from "@/lib/format";
@@ -75,7 +79,10 @@ export default function PortfoliosPage() {
                     {p.is_default && <span className="badge default">default</span>}
                   </td>
                   <td className="muted">{p.source}</td>
-                  <td className="num">{p.positions.length}</td>
+                  <td className="num">
+                    {p.positions.length}
+                    <ConfirmedSectors portfolio={p} />
+                  </td>
                   <td>
                     <div className="row" style={{ gap: "0.35rem" }}>
                       <button
@@ -135,25 +142,179 @@ export default function PortfoliosPage() {
   );
 }
 
+/** What the sector controls in the preview table need from CsvUpload. */
+type SectorControls = {
+  suggestions: Record<string, SectorSuggestion>;
+  setSector: (ticker: string, sector: string, source: "model" | "user") => void;
+  busy: boolean;
+};
+
+/** How many stored sectors came from the user rather than the reference table. */
+function ConfirmedSectors({ portfolio }: { portfolio: Portfolio }) {
+  const set = portfolio.positions.filter(
+    (p) => p.sector_source && p.sector_source !== "reference",
+  );
+  if (portfolio.source !== "csv" || set.length === 0) return null;
+  const tickers = set.map((p) => `${p.ticker} → ${p.sector}`).join(", ");
+  return (
+    <div className="muted small" title={tickers}>
+      {set.length} {set.length === 1 ? "sector" : "sectors"} set by you
+    </div>
+  );
+}
+
 function CsvUpload({ onCreated }: { onCreated: () => void }) {
+  const [file, setFile] = useState<File | null>(null);
   const [report, setReport] = useState<IngestReport | null>(null);
+  // Sectors the user has confirmed, re-sent with every preview of this file.
+  const [overrides, setOverrides] = useState<Record<string, SectorOverride>>({});
+  const [suggestions, setSuggestions] = useState<
+    Record<string, SectorSuggestion>
+  >({});
+  const [lookupAvailable, setLookupAvailable] = useState(false);
+  const [lookupCap, setLookupCap] = useState(100);
+  const [lookupState, setLookupState] = useState<
+    { kind: "idle" } | { kind: "busy" } | { kind: "done"; text: string }
+  >({ kind: "idle" });
   const [name, setName] = useState("");
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
+  const [repreviewing, setRepreviewing] = useState(false);
+
+  useEffect(() => {
+    sectorLookupAvailable()
+      .then((r) => {
+        setLookupAvailable(r.available);
+        setLookupCap(r.max_tickers);
+      })
+      .catch(() => setLookupAvailable(false));
+  }, []);
 
   async function onFile(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0];
-    if (!file) return;
+    const f = e.target.files?.[0];
+    if (!f) return;
     setError("");
     setReport(null);
+    setFile(f);
+    setOverrides({});
+    setSuggestions({});
+    setLookupState({ kind: "idle" });
     try {
-      setReport(await previewCsv(file));
+      setReport(await previewCsv(f));
     } catch (err) {
       setError(
         err instanceof ApiError ? String(err.detail) : "Could not read that file.",
       );
     }
   }
+
+  // Confirming a sector re-previews the file, so weights, coverage and
+  // warnings stay exactly what the server will store.
+  async function setSector(
+    ticker: string,
+    sector: string,
+    source: "model" | "user",
+  ) {
+    if (!file) return;
+    const next = { ...overrides, [ticker]: { sector, source } };
+    await applyOverrides(next);
+  }
+
+  async function applyOverrides(next: Record<string, SectorOverride>) {
+    if (!file) return;
+    setRepreviewing(true);
+    setError("");
+    try {
+      setReport(await previewCsv(file, next));
+      setOverrides(next);
+    } catch (err) {
+      setError(
+        err instanceof ApiError
+          ? String(err.detail)
+          : "Could not apply that sector.",
+      );
+    } finally {
+      setRepreviewing(false);
+    }
+  }
+
+  // Symbols worth asking about: every unrecognized-but-priceable row, plus
+  // every single-company row as a second opinion on the reference table.
+  // Funds are excluded — their sectors come from their holdings. Unknown
+  // tickers come first, so a file larger than one lookup's cap spends it on
+  // the rows that are excluded today.
+  const candidates = report
+    ? [
+        ...new Set([
+          ...report.rejected
+            .filter((r) => r.can_assign_sector && r.ticker)
+            .map((r) => r.ticker as string),
+          ...report.accepted.filter((a) => !a.is_fund).map((a) => a.ticker),
+        ]),
+      ]
+    : [];
+  const lookupTickers = candidates.slice(0, lookupCap);
+  const trimmed = candidates.length - lookupTickers.length;
+
+  async function checkSectors() {
+    setLookupState({ kind: "busy" });
+    try {
+      const res = await lookupSectors(lookupTickers);
+      if (res.source === "unavailable") {
+        setLookupState({
+          kind: "done",
+          text: "Sector suggestions are not available right now. You can still choose any sector yourself.",
+        });
+        return;
+      }
+      setSuggestions(Object.fromEntries(res.suggestions.map((s) => [s.ticker, s])));
+      const unchecked = res.unchecked.length;
+      setLookupState({
+        kind: "done",
+        text:
+          `Checked ${res.suggestions.length} of ${lookupTickers.length} symbols.` +
+          (unchecked
+            ? ` ${unchecked} could not be checked this time; you can still set them yourself.`
+            : "") +
+          (trimmed
+            ? ` One check covers up to ${lookupCap} symbols, so ${trimmed} recognized ${trimmed === 1 ? "holding was" : "holdings were"} not re-checked.`
+            : ""),
+      });
+    } catch (err) {
+      setLookupState({
+        kind: "done",
+        text:
+          err instanceof ApiError && err.status === 429
+            ? "Too many lookups in a short time — try again in a minute."
+            : "The sector check failed. You can still choose any sector yourself.",
+      });
+    }
+  }
+
+  // Suggestions that would change something if accepted: a sector for an
+  // unrecognized row, or a different sector than an included row has now.
+  const pending = report
+    ? Object.values(suggestions).filter((s) => {
+        if (s.kind !== "stock" || !s.sector) return false;
+        const a = report.accepted.find((x) => x.ticker === s.ticker);
+        if (a) return !a.is_fund && a.sector !== s.sector;
+        return report.rejected.some(
+          (r) => r.ticker === s.ticker && r.can_assign_sector,
+        );
+      })
+    : [];
+
+  async function acceptAll() {
+    const next = { ...overrides };
+    for (const s of pending) next[s.ticker] = { sector: s.sector!, source: "model" };
+    await applyOverrides(next);
+  }
+
+  const controls: SectorControls = {
+    suggestions,
+    setSector,
+    busy: repreviewing,
+  };
 
   async function commit() {
     if (!report || !name) return;
@@ -162,9 +323,22 @@ function CsvUpload({ onCreated }: { onCreated: () => void }) {
     try {
       await createPortfolioFromCsv(
         name,
-        report.accepted.map((a) => ({ ticker: a.ticker, quantity: a.quantity })),
+        report.accepted.map((a) =>
+          a.sector_source === "reference"
+            ? { ticker: a.ticker, quantity: a.quantity }
+            : {
+                ticker: a.ticker,
+                quantity: a.quantity,
+                sector: a.sector,
+                sector_source: a.sector_source,
+              },
+        ),
       );
       setReport(null);
+      setFile(null);
+      setOverrides({});
+      setSuggestions({});
+      setLookupState({ kind: "idle" });
       setName("");
       onCreated();
     } catch (err) {
@@ -183,7 +357,9 @@ function CsvUpload({ onCreated }: { onCreated: () => void }) {
       <p className="muted small">
         Broker exports welcome — headers like Symbol/Shares are mapped
         automatically. Your raw file is parsed in memory and never stored; only
-        ticker, quantity, and sector are kept.
+        ticker, quantity, and sector are kept. You can change the sector of any
+        single-company holding, or give one to a ticker we don&rsquo;t
+        recognize.
       </p>
       <input type="file" accept=".csv,text/csv,text/plain" onChange={onFile} />
       {error && <div className="error">{error}</div>}
@@ -191,7 +367,48 @@ function CsvUpload({ onCreated }: { onCreated: () => void }) {
       {report && (
         <>
           <IngestSummary report={report} />
-          <FilePreviewTable report={report} />
+          {lookupAvailable && lookupTickers.length > 0 && (
+            <div className="info-notice">
+              <div className="row" style={{ alignItems: "center", gap: "0.75rem" }}>
+                <button
+                  className="btn small"
+                  onClick={checkSectors}
+                  disabled={lookupState.kind === "busy"}
+                >
+                  {lookupState.kind === "busy"
+                    ? "Checking sectors…"
+                    : "Check sectors with Claude"}
+                </button>
+                {pending.length > 0 && (
+                  <button
+                    className="btn small"
+                    onClick={acceptAll}
+                    disabled={repreviewing}
+                  >
+                    Use all {pending.length} suggested{" "}
+                    {pending.length === 1 ? "sector" : "sectors"}
+                  </button>
+                )}
+              </div>
+              <p className="muted small">
+                Sends the {lookupTickers.length} ticker{" "}
+                {lookupTickers.length === 1 ? "symbol" : "symbols"} in this file
+                to Anthropic&rsquo;s Claude, which may search the web for ones it
+                doesn&rsquo;t know — never quantities, values, or your identity.
+                A suggestion changes nothing until you choose to use it.
+              </p>
+              {lookupState.kind === "busy" && (
+                <p className="muted small">
+                  This can take up to a minute when unfamiliar tickers need a web
+                  search.
+                </p>
+              )}
+              {lookupState.kind === "done" && (
+                <p className="small">{lookupState.text}</p>
+              )}
+            </div>
+          )}
+          <FilePreviewTable report={report} controls={controls} />
           {report.warnings.map((w, i) => (
             <div key={i} className="muted small">
               · {w}
@@ -231,6 +448,8 @@ function CsvUpload({ onCreated }: { onCreated: () => void }) {
 function IngestSummary({ report }: { report: IngestReport }) {
   const lost = report.rejected.filter((r) => !BENIGN_REASONS.has(r.reason));
   const unknown = lost.filter((r) => r.reason === "unknown_ticker").length;
+  const assignable = lost.filter((r) => r.can_assign_sector).length;
+  const noPrice = lost.filter((r) => r.reason === "no_price").length;
   const noEquity = lost.filter(
     (r) => r.reason === "no_equity_exposure",
   ).length;
@@ -315,8 +534,20 @@ function IngestSummary({ report }: { report: IngestReport }) {
               <li>
                 <strong>{unknown}</strong>{" "}
                 {unknown === 1 ? "ticker is" : "tickers are"} outside the
-                snapshot&rsquo;s ticker universe, so no sector or price is
-                available for {unknown === 1 ? "it" : "them"}.
+                snapshot&rsquo;s ticker universe, so no sector is on record for{" "}
+                {unknown === 1 ? "it" : "them"}.
+                {assignable > 0 &&
+                  (assignable === unknown
+                    ? " Choose a sector in the table below to include it."
+                    : ` ${assignable} can be included if you choose a sector below.`)}
+              </li>
+            )}
+            {noPrice > 0 && (
+              <li>
+                <strong>{noPrice}</strong>{" "}
+                {noPrice === 1 ? "holding has" : "holdings have"} a sector but no
+                price in this snapshot, so {noPrice === 1 ? "its" : "their"}{" "}
+                weight cannot be computed.
               </li>
             )}
           </ul>
@@ -338,7 +569,13 @@ type PreviewRow = {
  * holdings interleaved — capped at PREVIEW_ROWS with a "more" toggle.
  * Showing only the accepted rows hid the reason a big file rendered small.
  */
-function FilePreviewTable({ report }: { report: IngestReport }) {
+function FilePreviewTable({
+  report,
+  controls,
+}: {
+  report: IngestReport;
+  controls: SectorControls;
+}) {
   const [showAll, setShowAll] = useState(false);
 
   // One entry per file row. A row can appear in both lists (a normalized
@@ -353,7 +590,7 @@ function FilePreviewTable({ report }: { report: IngestReport }) {
     if (existing?.accepted) continue;
     byRow.set(r.row, {
       row: r.row,
-      ticker: r.raw.split(",")[0]?.trim() || "—",
+      ticker: r.ticker ?? (r.raw.split(",")[0]?.trim() || "—"),
       rejected: r,
     });
   }
@@ -387,7 +624,7 @@ function FilePreviewTable({ report }: { report: IngestReport }) {
           </thead>
           <tbody>
             {visible.map((r) => (
-              <PreviewTableRow key={r.row} entry={r} />
+              <PreviewTableRow key={r.row} entry={r} controls={controls} />
             ))}
           </tbody>
         </table>
@@ -408,7 +645,105 @@ function FilePreviewTable({ report }: { report: IngestReport }) {
   );
 }
 
-function PreviewTableRow({ entry }: { entry: PreviewRow }) {
+const SOURCE_LABEL: Record<string, string> = {
+  model: "suggested by Claude",
+  user: "set by you",
+};
+
+/** The 11-sector picker. `value` empty means "not chosen yet". */
+function SectorPicker({
+  ticker,
+  value,
+  controls,
+}: {
+  ticker: string;
+  value: string;
+  controls: SectorControls;
+}) {
+  return (
+    <select
+      aria-label={`Sector for ${ticker}`}
+      value={value}
+      disabled={controls.busy}
+      onChange={(e) => {
+        if (e.target.value) controls.setSector(ticker, e.target.value, "user");
+      }}
+      style={{ minWidth: "13rem", padding: "0.3rem 0.5rem", fontSize: "0.85rem" }}
+    >
+      {!value && <option value="">Choose a sector…</option>}
+      {SECTORS.map((s) => (
+        <option key={s} value={s}>
+          {s}
+        </option>
+      ))}
+    </select>
+  );
+}
+
+/**
+ * What the lookup said about one symbol, shown only when it would change
+ * something or explains why nothing can: agreement with the current sector is
+ * silent. Nothing is applied until the user clicks "Use".
+ */
+function SuggestionNote({
+  ticker,
+  current,
+  controls,
+}: {
+  ticker: string;
+  current: string | null;
+  controls: SectorControls;
+}) {
+  const s = controls.suggestions[ticker];
+  if (!s) return null;
+  const detail = [
+    s.company_name,
+    `${s.confidence} confidence`,
+    s.searched ? "searched the web" : null,
+  ]
+    .filter(Boolean)
+    .join(" · ");
+
+  if (s.kind === "stock" && s.sector) {
+    if (s.sector === current) return null;
+    return (
+      <div className="small" style={{ marginTop: "0.3rem" }}>
+        Claude suggests <strong>{s.sector}</strong>
+        {current ? <> (now {current})</> : null}{" "}
+        <button
+          className="link-btn"
+          disabled={controls.busy}
+          onClick={() => controls.setSector(ticker, s.sector!, "model")}
+        >
+          Use
+        </button>
+        <div className="muted">
+          {s.rationale} <span>({detail})</span>
+        </div>
+      </div>
+    );
+  }
+  const what =
+    s.kind === "fund"
+      ? "looks like a fund. A fund holds many sectors, so it cannot be given just one; it isn't in our fund table, so it stays out."
+      : s.kind === "non_equity"
+        ? "has no equity sector exposure (a bond, cash-like or commodity holding)."
+        : "could not identify this symbol.";
+  return (
+    <div className="muted small" style={{ marginTop: "0.3rem" }}>
+      Claude {s.kind === "unknown" ? "" : "says this "}
+      {what} {s.rationale && s.kind !== "unknown" ? s.rationale : null}
+    </div>
+  );
+}
+
+function PreviewTableRow({
+  entry,
+  controls,
+}: {
+  entry: PreviewRow;
+  controls: SectorControls;
+}) {
   const { accepted: a, rejected: r } = entry;
   const [open, setOpen] = useState(false);
 
@@ -439,7 +774,17 @@ function PreviewTableRow({ entry }: { entry: PreviewRow }) {
                 )}
               </button>
             ) : (
-              a.sector
+              <>
+                <SectorPicker ticker={a.ticker} value={a.sector} controls={controls} />
+                {a.sector_source !== "reference" && (
+                  <div className="small">{SOURCE_LABEL[a.sector_source]}</div>
+                )}
+                <SuggestionNote
+                  ticker={a.ticker}
+                  current={a.sector}
+                  controls={controls}
+                />
+              </>
             )}
           </td>
           <td className="num">{a.quantity}</td>
@@ -488,6 +833,33 @@ function PreviewTableRow({ entry }: { entry: PreviewRow }) {
   }
 
   const benign = r ? BENIGN_REASONS.has(r.reason) : false;
+  if (r?.can_assign_sector && r.ticker) {
+    const s = controls.suggestions[r.ticker];
+    // A symbol Claude places as a fund or non-equity holding is not offered a
+    // single sector: invariant 8, and the honest answer for a bond.
+    const blocked = s?.kind === "fund" || s?.kind === "non_equity";
+    return (
+      <tr className="row-excluded">
+        <td className="num muted">{entry.row}</td>
+        <td>
+          <strong>{r.ticker}</strong>
+        </td>
+        <td>
+          <span className="badge provisional">Needs a sector</span>
+        </td>
+        <td>
+          {!blocked && (
+            <SectorPicker ticker={r.ticker} value="" controls={controls} />
+          )}
+          <SuggestionNote ticker={r.ticker} current={null} controls={controls} />
+        </td>
+        <td className="muted small" colSpan={4}>
+          {REJECT_REASON[r.reason] ?? r.reason}
+          {r.resolution ? ` — ${r.resolution}` : ""}
+        </td>
+      </tr>
+    );
+  }
   return (
     <tr className={benign ? "row-skipped" : "row-excluded"}>
       <td className="num muted">{entry.row}</td>

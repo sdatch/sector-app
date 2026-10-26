@@ -22,10 +22,17 @@ from __future__ import annotations
 
 import csv
 import io
+from collections.abc import Callable
 
 from app.snapshots.providers.funds import FundComposition
 
-from .schemas import IngestAccepted, IngestRejected, IngestReport, IngestTotals
+from .schemas import (
+    IngestAccepted,
+    IngestRejected,
+    IngestReport,
+    IngestTotals,
+    SectorOverride,
+)
 from .sectors import FUND_SECTOR
 
 MAX_BYTES = 1_000_000  # 1 MB
@@ -110,8 +117,24 @@ def parse_csv(
     ticker_sector: dict[str, str],
     ticker_price: dict[str, float],
     fund_composition: dict[str, FundComposition] | None = None,
+    *,
+    price_of: Callable[[str], float | None] | None = None,
+    sector_overrides: dict[str, SectorOverride] | None = None,
 ) -> IngestReport:
+    """Parse a broker export into accepted and rejected rows.
+
+    `sector_overrides` carries sectors the user confirmed in the preview
+    (ticker -> sector). An override admits a ticker the reference table does
+    not know, or replaces the table's sector for one it does; it never applies
+    to a fund, whose exposure comes from its holdings (invariant 8). With no
+    overrides the report is exactly what it was before overrides existed.
+
+    `price_of` values a ticker, listed or not (SnapshotBundle.price_of);
+    without it only the reference prices are used.
+    """
     funds = fund_composition or {}
+    overrides = sector_overrides or {}
+    price_of = price_of or ticker_price.get
     text = _decode(content)
     reader = csv.reader(io.StringIO(text))
     # Carry each row's true 1-based file line number so the preview UI can
@@ -142,6 +165,8 @@ def parse_csv(
     # Provisional (line, ticker, sector, numeric, note) tuples before
     # weight/value resolution.
     staged: list[tuple[int, str, str, float, str | None]] = []
+    # line -> where an overridden row's sector came from.
+    sources: dict[int, str] = {}
     # Priceable holdings we recognize but cannot model at all (bond funds).
     # Kept so the "unmodeled share" reflects them instead of pretending an
     # account that is 40% bonds is fully covered.
@@ -186,6 +211,31 @@ def parse_csv(
             rejected.append(IngestRejected(row=line_no, raw=raw, reason="non_positive"))
             continue
 
+        override = overrides.get(ticker)
+        if override is not None and ticker in funds:
+            raise IngestError(
+                f"{ticker} is a fund: its sectors come from its holdings and "
+                "cannot be set by hand"
+            )
+        if override is not None and override.sector != ticker_sector.get(ticker):
+            if price_of(ticker) is None:
+                rejected.append(
+                    IngestRejected(
+                        row=line_no, raw=raw, reason="no_price", ticker=ticker
+                    )
+                )
+                continue
+            staged.append((line_no, ticker, override.sector, amount, resolution))
+            sources[line_no] = override.source
+            if changed:
+                rejected.append(
+                    IngestRejected(
+                        row=line_no, raw=raw, reason="ticker_normalized",
+                        resolution=f"{ticker} accepted",
+                    )
+                )
+            continue
+
         sector = ticker_sector.get(ticker)
         if sector is None:
             comp = funds.get(ticker)
@@ -215,6 +265,8 @@ def parse_csv(
                 IngestRejected(
                     row=line_no, raw=raw, reason="unknown_ticker",
                     resolution=resolution,
+                    ticker=ticker,
+                    can_assign_sector=price_of(ticker) is not None,
                 )
             )
             continue
@@ -240,14 +292,14 @@ def parse_csv(
 
     values: list[float] = []
     for _line, ticker, _sector, amount, _res in staged:
-        price = ticker_price[ticker]
+        price = price_of(ticker)
         qty = (amount * NOMINAL_VALUE / price) if use_weight else amount
         values.append(qty * price)
     total_value = sum(values) or 1.0
 
     unmodeled_value = 0.0
     for (line_no, ticker, sector, amount, res), value in zip(staged, values):
-        price = ticker_price[ticker]
+        price = price_of(ticker)
         qty = (amount * NOMINAL_VALUE / price) if use_weight else amount
         comp = funds.get(ticker) if sector == FUND_SECTOR else None
         if comp is not None:
@@ -266,6 +318,7 @@ def parse_csv(
                 fund_name=comp.name if comp else None,
                 equity_share=comp.equity_share if comp else 1.0,
                 sector_breakdown=dict(comp.sector_weights) if comp else None,
+                sector_source=sources.get(line_no, "reference"),
             )
         )
 
@@ -275,7 +328,7 @@ def parse_csv(
     # reports 0% unmodeled, which is exactly backwards.
     excluded_value = 0.0
     for ticker, amount in excluded_funds:
-        price = ticker_price.get(ticker, 0.0)
+        price = price_of(ticker) or 0.0
         qty = (amount * NOMINAL_VALUE / price) if (use_weight and price) else amount
         excluded_value += qty * price
     unmodeled_value += excluded_value
@@ -291,12 +344,23 @@ def parse_csv(
         warnings.append("weights converted to notional quantities vs $100k base")
 
     n_unknown = sum(r.reason == "unknown_ticker" for r in rejected)
+    n_assignable = sum(r.can_assign_sector for r in rejected)
+    n_overridden = sum(a.sector_source != "reference" for a in accepted)
     n_no_equity = sum(r.reason == "no_equity_exposure" for r in rejected)
     n_decomposed = sum(a.is_fund for a in accepted)
     if n_unknown:
         warnings.append(
             f"{n_unknown} holding{'' if n_unknown == 1 else 's'} outside the "
             "snapshot's ticker universe could not be risk-modeled"
+            + (" — choose a sector to include it" if n_assignable == 1 else
+               " — choose a sector for each to include them" if n_assignable
+               else "")
+        )
+    if n_overridden:
+        one = n_overridden == 1
+        warnings.append(
+            f"{n_overridden} holding{'' if one else 's'} use{'s' if one else ''} "
+            "a sector you confirmed rather than the reference table's"
         )
     if n_no_equity:
         warnings.append(
@@ -318,7 +382,10 @@ def parse_csv(
 
     considered = len(accepted) + sum(
         r.reason
-        in {"unknown_ticker", "no_equity_exposure", "invalid_number", "non_positive"}
+        in {
+            "unknown_ticker", "no_price", "no_equity_exposure", "invalid_number",
+            "non_positive",
+        }
         for r in rejected
     )
     coverage = round(len(accepted) / considered, 4) if considered else 0.0

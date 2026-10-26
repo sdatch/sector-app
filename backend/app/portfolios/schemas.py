@@ -4,10 +4,34 @@ from __future__ import annotations
 
 import uuid
 from datetime import datetime
+from typing import Literal
 
-from pydantic import BaseModel, Field, model_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 
 from app.contracts.comparison import SectorWeight
+
+from .sectors import SECTOR_CODE
+
+# Where a stored position's sector came from. "reference" is the curated table
+# (and NULL in the database, so rows committed before this existed need no
+# backfill); "model" is a lookup suggestion the user accepted unchanged; "user"
+# is a sector the user picked. Either way a person confirmed it — the lookup
+# only ever proposes.
+SectorSource = Literal["reference", "model", "user"]
+
+
+class SectorOverride(BaseModel):
+    """A sector the user has confirmed for one ticker in the preview."""
+
+    sector: str
+    source: Literal["model", "user"] = "user"
+
+    @field_validator("sector")
+    @classmethod
+    def known_sector(cls, v: str) -> str:
+        if v not in SECTOR_CODE:
+            raise ValueError(f"Unknown sector '{v}'")
+        return v
 
 
 class IngestAccepted(BaseModel):
@@ -21,6 +45,7 @@ class IngestAccepted(BaseModel):
     # interleaved with the rows that did not make it.
     row: int = 0
     note: str | None = None
+    sector_source: SectorSource = "reference"
     # Pooled vehicles only. `sector` carries the FUND_SECTOR sentinel and the
     # real exposure lives here: sector -> share of this holding's equity
     # sleeve. `equity_share` < 1 means part of the holding (bonds, cash) has no
@@ -36,6 +61,12 @@ class IngestRejected(BaseModel):
     raw: str
     reason: str
     resolution: str | None = None
+    # The normalized symbol, for rows that got far enough to have one
+    # (unknown_ticker, no_price): what a sector override or lookup is keyed on.
+    ticker: str | None = None
+    # An unrecognized ticker this snapshot can still price: the user may give
+    # it a sector (by hand or on a lookup suggestion) and it is then included.
+    can_assign_sector: bool = False
 
 
 class IngestTotals(BaseModel):
@@ -60,6 +91,20 @@ class IngestReport(BaseModel):
 class AcceptedRow(BaseModel):
     ticker: str
     quantity: float = Field(gt=0)
+    # Set only when the user confirmed a sector other than the reference one.
+    # Omitted, the server resolves the sector itself exactly as before.
+    sector: str | None = None
+    sector_source: Literal["model", "user"] | None = None
+
+    @model_validator(mode="after")
+    def source_needs_sector(self) -> AcceptedRow:
+        if self.sector is not None and self.sector not in SECTOR_CODE:
+            raise ValueError(f"Unknown sector '{self.sector}'")
+        if self.sector is None:
+            self.sector_source = None
+        elif self.sector_source is None:
+            self.sector_source = "user"
+        return self
 
 
 class PortfolioCreate(BaseModel):
@@ -84,6 +129,7 @@ class PositionRead(BaseModel):
     ticker: str
     quantity: float
     sector: str
+    sector_source: SectorSource = "reference"
 
 
 class PortfolioRead(BaseModel):

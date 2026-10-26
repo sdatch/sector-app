@@ -125,7 +125,8 @@ async def test_csv_preview_then_commit(client):
 
 async def test_raw_file_never_stored(client):
     """Only (ticker, quantity, sector) survive ingestion — no raw columns,
-    account numbers, or cash lines (NFR-3)."""
+    account numbers, or cash lines (NFR-3). `sector_source` is provenance the
+    server derives (who chose the sector), not anything read from the file."""
     files = {"file": ("holdings.csv", CSV, "text/csv")}
     report = (await client.post("/v1/portfolios/preview", files=files)).json()
     commit = {
@@ -137,7 +138,8 @@ async def test_raw_file_never_stored(client):
     }
     pf = (await client.post("/v1/portfolios", json=commit)).json()
     for p in pf["positions"]:
-        assert set(p.keys()) == {"ticker", "quantity", "sector"}
+        assert set(p.keys()) == {"ticker", "quantity", "sector", "sector_source"}
+        assert p["sector_source"] == "reference"
 
 
 async def test_manual_portfolio_and_default_switch(client):

@@ -15,6 +15,8 @@ def test_importing_the_app_does_not_import_the_sdk():
         "assert 'anthropic' not in sys.modules, 'anthropic imported eagerly'; "
         "import app.narration; "
         "assert 'anthropic' not in sys.modules, 'anthropic imported by package'; "
+        "import app.sector_lookup; "
+        "assert 'anthropic' not in sys.modules, 'anthropic imported by lookup'; "
         "print('ok')"
     )
     result = subprocess.run(
