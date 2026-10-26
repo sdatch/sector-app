@@ -35,6 +35,20 @@ If Railway's value is `postgresql://…`, override to
   ```
 - **Volume:** mount one at `/srv/data/artifacts` for the memory-mapped
   snapshot artifacts (persists across restarts).
+- **Narration (optional, off by default).** Leave it off and nothing changes:
+  no key is needed, the SDK is never imported, and easy mode renders its own
+  deterministic copy. To turn it on, add:
+  ```
+  NARRATION_ENABLED=true
+  ANTHROPIC_API_KEY=<key>
+  ```
+  Two things to know before you do. It sends sector weights and the computed
+  deltas to Anthropic (never tickers, quantities or account value), so the
+  user-facing disclosure in the UI and PRD §13 must stay accurate — the env
+  flag is an operator switch, not consent. And it costs money per narrated
+  view, bounded by `NARRATION_PER_MINUTE` (default 5/user) rather than by the
+  cache, which is in-process and does not survive a restart.
+  `NARRATION_STUB` is ignored when `ENVIRONMENT=production`.
 
 ## 3. Frontend service
 - **Source:** repo root `frontend/` (Dockerfile detected).
