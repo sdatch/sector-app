@@ -358,11 +358,19 @@ is truth.**
   is registered **before** `portfolios_router`, whose `/{portfolio_id}` would
   otherwise capture `/sector-lookup`.
 
-**Untested against live output** until the first run with a real key: the
-`output_config.format` + web-search pairing has been exercised only against a
-mocked transport (`tests/sector_lookup/test_client_wire.py`). Watch
-`sector lookup:` (usage) and `sector lookup rejected:` in the logs the first
-time it is on. To click through with no key:
+**One live run so far (2026-10-25)**, on six symbols: AAPL, FI, CRCL, LWAY,
+JEPI and QZXQ.
+- The API accepts `output_config.format` together with web search, and the
+  answer parses.
+- All six answers were correct, with no validator rejections. JEPI came back
+  as `fund` with no sector; QZXQ came back `unknown`.
+- The call took 37 s and cost about $0.26: 42.8k input tokens, almost all of
+  them search results, plus 5 searches.
+
+Cost scales with unfamiliar symbols, not file size. The UI has not yet been
+clicked through against the real model; that pass used the stub. Keep watching
+`sector lookup:` (usage) and `sector lookup rejected:` in the logs. To click
+through with no key:
 `SECTOR_LOOKUP_ENABLED=true SECTOR_LOOKUP_STUB=true docker compose up -d backend`.
 
 ## Snapshot staleness (load-bearing)
