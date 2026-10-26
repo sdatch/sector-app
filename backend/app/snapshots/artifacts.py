@@ -22,7 +22,7 @@ from app.engines.base import SnapshotArtifacts
 
 from .builder import build_artifacts
 from .providers.funds import FundComposition
-from .providers.synthetic import SyntheticProvider
+from .providers.synthetic import SyntheticProvider, hashed_price
 
 logger = logging.getLogger(__name__)
 
@@ -49,10 +49,28 @@ class SnapshotBundle:
     ticker_sector: dict[str, str]
     ticker_price: dict[str, float]
     fund_composition: dict[str, FundComposition] = field(default_factory=dict)
+    # See RawMarketData.unlisted_price_seed. None => only listed tickers price.
+    unlisted_price_seed: int | None = None
 
     @property
     def snapshot_id(self) -> str:
         return self.artifacts.meta.snapshot_id
+
+    def price_of(self, ticker: str) -> float | None:
+        """Last price for any ticker this snapshot can value, else None.
+
+        Listed tickers read the reference table. An unlisted one — a holding
+        the user has given a sector by hand or on a suggestion — is priced by
+        the provider's own formula when it has one, so it is valued on the
+        same basis as every other position rather than vanishing at zero.
+        Deterministic: a pure function of (snapshot, ticker).
+        """
+        price = self.ticker_price.get(ticker)
+        if price is not None:
+            return price
+        if self.unlisted_price_seed is None:
+            return None
+        return hashed_price(ticker, self.unlisted_price_seed)
 
 
 def _npz_path(dir_: Path, snapshot_id: str) -> Path:
@@ -89,6 +107,7 @@ def save_bundle(
         "fund_composition": {
             t: asdict(c) for t, c in bundle.fund_composition.items()
         },
+        "unlisted_price_seed": bundle.unlisted_price_seed,
         # Identifies the inputs this artifact was built from, so a later
         # process can tell a current artifact from a stale one.
         "fingerprint": fingerprint,
@@ -128,6 +147,7 @@ def load_bundle(snapshot_id: str, dir_: Path) -> SnapshotBundle:
             t: FundComposition(**c)
             for t, c in meta.get("fund_composition", {}).items()
         },
+        unlisted_price_seed=meta.get("unlisted_price_seed"),
     )
 
 
@@ -138,6 +158,7 @@ def build_synthetic_bundle(snapshot_id: str) -> SnapshotBundle:
         ticker_sector=raw.ticker_sector,
         ticker_price=raw.ticker_price,
         fund_composition=raw.fund_composition,
+        unlisted_price_seed=raw.unlisted_price_seed,
     )
 
 

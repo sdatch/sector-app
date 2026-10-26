@@ -47,6 +47,13 @@ class RawMarketData:
     # at once, so it is decomposed at evaluation time rather than forced into
     # one. See providers/funds.py.
     fund_composition: dict[str, FundComposition]
+    # Seed for pricing a ticker *outside* ticker_price on demand, or None when
+    # the provider cannot. Only the synthetic provider sets it: its prices are
+    # a pure hash of (seed, ticker) anyway, so an unlisted ticker priced the
+    # same way has exactly the standing of a listed one. A real provider that
+    # cannot quote an arbitrary symbol leaves it None, and such a holding stays
+    # rejected (`no_price`) even once the user has given it a sector.
+    unlisted_price_seed: int | None = None
 
 
 class MarketDataProvider(Protocol):

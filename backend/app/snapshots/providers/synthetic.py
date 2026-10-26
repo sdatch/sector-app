@@ -215,6 +215,10 @@ class SyntheticProvider:
                 "sectors": list(SECTORS),
                 "factors": list(FACTORS),
                 "tickers": sorted(_TICKER_SECTOR.items()),
+                # How a ticker outside the table is priced. Part of the
+                # fingerprint so an artifact persisted before unlisted pricing
+                # existed (no seed in its meta) is rebuilt, not served.
+                "unlisted_pricing": "hashed",
                 "funds": sorted(
                     (t, c.name, c.equity_share, sorted(c.sector_weights.items()))
                     for t, c in FUND_COMPOSITION.items()
@@ -268,6 +272,7 @@ class SyntheticProvider:
             ticker_sector=dict(_TICKER_SECTOR),
             ticker_price=self._synthetic_prices(),
             fund_composition=dict(FUND_COMPOSITION),
+            unlisted_price_seed=self.seed,
         )
 
     def _synthetic_prices(self) -> dict[str, float]:
@@ -282,10 +287,11 @@ class SyntheticProvider:
         so an unpriced fund ticker would be worth zero and vanish.
         """
         tickers = set(_TICKER_SECTOR) | set(FUND_COMPOSITION)
-        return {t: _hashed_price(t, self.seed) for t in sorted(tickers)}
+        return {t: hashed_price(t, self.seed) for t in sorted(tickers)}
 
 
-def _hashed_price(ticker: str, seed: int) -> float:
+def hashed_price(ticker: str, seed: int) -> float:
+    """The one synthetic price formula, for listed and unlisted tickers alike."""
     digest = hashlib.sha256(f"{seed}:{ticker}".encode()).digest()
     unit = int.from_bytes(digest[:8], "big") / 2**64  # [0, 1)
     return round(25.0 + unit * 525.0, 2)

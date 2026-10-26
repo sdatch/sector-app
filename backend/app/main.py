@@ -21,12 +21,14 @@ from fastapi.responses import JSONResponse
 
 from app.api.comparisons import router as comparisons_router
 from app.api.narration import router as narration_router
+from app.api.sector_lookup import router as sector_lookup_router
 from app.auth.schemas import UserCreate, UserRead, UserUpdate
 from app.auth.users import ConsentRequired, auth_backend, fastapi_users
 from app.config import get_settings
 from app.engines import build_registry
 from app.history.service import persist_comparison
 from app.narration import NarrationCache
+from app.sector_lookup import SectorLookupCache
 from app.orchestration.cache import IdempotencyStore
 from app.orchestration.comparator import ComparisonManager
 from app.orchestration.rate_limit import SlidingWindowLimiter
@@ -82,6 +84,15 @@ async def lifespan(app: FastAPI):
     app.state.narration_limiter = SlidingWindowLimiter(
         settings.narration_per_minute
     )
+    # Optional sector lookup for the CSV preview (off by default); same lazy
+    # client rule as narration.
+    app.state.sector_lookup_client = None
+    app.state.sector_lookup_cache = SectorLookupCache(
+        settings.sector_lookup_cache_size
+    )
+    app.state.sector_lookup_limiter = SlidingWindowLimiter(
+        settings.sector_lookup_per_minute
+    )
 
     # Daily maintenance: value portfolios into progress_points + purge expired.
     maintenance = asyncio.create_task(maintenance_loop(bundle, settings))
@@ -89,9 +100,10 @@ async def lifespan(app: FastAPI):
         yield
     finally:
         maintenance.cancel()
-        client = getattr(app.state, "narration_client", None)
-        if client is not None:
-            await client.aclose()
+        for name in ("narration_client", "sector_lookup_client"):
+            client = getattr(app.state, name, None)
+            if client is not None:
+                await client.aclose()
         if executor is not None:
             executor.shutdown(cancel_futures=True)
 
@@ -146,6 +158,9 @@ def create_app() -> FastAPI:
     app.include_router(auth_dev_router)
 
     # --- app resources ---
+    # Before portfolios_router: its GET /{portfolio_id} would otherwise
+    # capture /sector-lookup and fail UUID validation.
+    app.include_router(sector_lookup_router)
     app.include_router(portfolios_router)
     app.include_router(comparisons_router)
     app.include_router(narration_router)

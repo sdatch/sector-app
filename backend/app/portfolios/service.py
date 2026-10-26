@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import uuid
 from collections import defaultdict
+from collections.abc import Callable
 from dataclasses import dataclass
 
 from sqlalchemy import select, update
@@ -41,12 +42,20 @@ async def create_portfolio(
     ticker_sector: dict[str, str],
     allowed_sectors: set[str],
     fund_composition: dict[str, FundComposition] | None = None,
+    price_of: Callable[[str], float | None] | None = None,
 ) -> Portfolio:
     funds = fund_composition or {}
     if payload.accepted:
         source = "csv"
         positions = []
         for row in payload.accepted:
+            if row.sector is not None:
+                positions.append(
+                    _confirmed_position(
+                        row, ticker_sector, allowed_sectors, funds, price_of
+                    )
+                )
+                continue
             sector = ticker_sector.get(row.ticker)
             if sector is None:
                 comp = funds.get(row.ticker)
@@ -101,6 +110,43 @@ async def create_portfolio(
         raise PortfolioConflict() from exc
     await session.refresh(portfolio)
     return portfolio
+
+
+def _confirmed_position(
+    row,
+    ticker_sector: dict[str, str],
+    allowed_sectors: set[str],
+    funds: dict[str, FundComposition],
+    price_of: Callable[[str], float | None] | None,
+) -> Position:
+    """A row whose sector the user confirmed in the preview.
+
+    The stored sector is what resolve_allocation reads at evaluation time, so
+    this is the only place a looked-up or hand-picked sector becomes input to
+    the models — after a person said yes, never straight from the lookup.
+    """
+    if row.ticker in funds:
+        # Invariant 8: a fund is decomposed, never assigned one sector.
+        raise PortfolioValidationError(
+            f"'{row.ticker}' is a fund; its sectors come from its holdings"
+        )
+    if row.sector not in allowed_sectors:
+        raise PortfolioValidationError(f"Unknown sector '{row.sector}'")
+    if row.ticker not in ticker_sector:
+        priced = price_of(row.ticker) if price_of is not None else None
+        if priced is None:
+            raise PortfolioValidationError(
+                f"'{row.ticker}' cannot be priced in this snapshot"
+            )
+    if row.sector == ticker_sector.get(row.ticker):
+        # Confirming the reference sector is not an override.
+        return Position(ticker=row.ticker, quantity=row.quantity, sector=row.sector)
+    return Position(
+        ticker=row.ticker,
+        quantity=row.quantity,
+        sector=row.sector,
+        sector_source=row.sector_source,
+    )
 
 
 async def list_portfolios(
@@ -159,6 +205,7 @@ def resolve_allocation(
     portfolio: Portfolio,
     ticker_price: dict[str, float],
     fund_composition: dict[str, FundComposition] | None = None,
+    price_of: Callable[[str], float | None] | None = None,
 ) -> ResolvedAllocation:
     """Resolve a portfolio to sector weights against current snapshot prices.
 
@@ -173,6 +220,7 @@ def resolve_allocation(
     way refreshed prices already do.
     """
     funds = fund_composition or {}
+    price = price_of or ticker_price.get
     agg: dict[str, float] = defaultdict(float)
     unmodeled_value = 0.0
     notes: dict[str, None] = {}  # ordered set
@@ -182,7 +230,7 @@ def resolve_allocation(
             agg[p.sector] += float(p.quantity)
     else:
         for p in portfolio.positions:
-            value = float(p.quantity) * ticker_price.get(p.ticker, 0.0)
+            value = float(p.quantity) * (price(p.ticker) or 0.0)
             if value <= 0:
                 continue
             comp = funds.get(p.ticker)
@@ -219,7 +267,10 @@ def portfolio_sector_weights(
     portfolio: Portfolio,
     ticker_price: dict[str, float],
     fund_composition: dict[str, FundComposition] | None = None,
+    price_of: Callable[[str], float | None] | None = None,
 ) -> dict[str, float]:
     """Weights-only view of `resolve_allocation`, for callers that do not need
     the unmodeled sleeve."""
-    return resolve_allocation(portfolio, ticker_price, fund_composition).weights
+    return resolve_allocation(
+        portfolio, ticker_price, fund_composition, price_of
+    ).weights

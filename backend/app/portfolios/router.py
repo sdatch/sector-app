@@ -1,6 +1,9 @@
 """Portfolio management + CSV ingestion routes (user_model_spec §3).
 
-  POST /v1/portfolios/preview   multipart file -> IngestReport (nothing saved)
+  POST /v1/portfolios/preview   multipart file (+ sector_overrides) -> IngestReport
+                                (nothing saved)
+  POST /v1/portfolios/sector-lookup  {tickers} -> suggested sectors (optional,
+                                off by default; see app/sector_lookup)
   POST /v1/portfolios           {name, accepted|sector_weights} -> 201 Portfolio
   GET  /v1/portfolios           list
   GET  /v1/portfolios/{id}      one
@@ -10,16 +13,19 @@
 
 from __future__ import annotations
 
+import json
 import uuid
 
 from fastapi import (
     APIRouter,
     Depends,
+    Form,
     HTTPException,
     Request,
     Response,
     UploadFile,
 )
+from pydantic import TypeAdapter, ValidationError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.auth.csrf import require_csrf_header
@@ -37,6 +43,7 @@ from .schemas import (
     IngestReport,
     PortfolioCreate,
     PortfolioRead,
+    SectorOverride,
 )
 from .service import (
     PortfolioConflict,
@@ -59,6 +66,20 @@ _ALLOWED_MIME = {
 }
 
 
+_OVERRIDES = TypeAdapter(dict[str, SectorOverride])
+
+
+def _parse_overrides(raw: str | None) -> dict[str, SectorOverride]:
+    if not raw:
+        return {}
+    try:
+        overrides = _OVERRIDES.validate_python(json.loads(raw))
+    except (ValueError, ValidationError) as exc:
+        raise HTTPException(status_code=422, detail="invalid_sector_overrides") from exc
+    # Keys are matched against normalized tickers.
+    return {t.strip().upper().replace(".", "-"): o for t, o in overrides.items()}
+
+
 def _bundle(request: Request):
     return request.app.state.snapshots.get(
         request.app.state.settings.active_snapshot_id
@@ -69,12 +90,18 @@ def _bundle(request: Request):
 async def preview_upload(
     request: Request,
     file: UploadFile,
+    # JSON {ticker: {sector, source}} — sectors the user confirmed in an
+    # earlier preview of the same file. Re-previewing with them keeps weights,
+    # coverage and warnings server-computed, so the client never does weight
+    # math. The file is re-sent and re-parsed; nothing is held between calls.
+    sector_overrides: str | None = Form(default=None),
     user: User = Depends(current_active_user),
     _: None = Depends(require_csrf_header),
 ) -> IngestReport:
     ctype = file.content_type or ""
     if ctype not in _ALLOWED_MIME and not ctype.startswith("text/"):
         raise HTTPException(status_code=422, detail="unsupported_content_type")
+    overrides = _parse_overrides(sector_overrides)
     content = await file.read()
     bundle = _bundle(request)
     try:
@@ -83,6 +110,8 @@ async def preview_upload(
             bundle.ticker_sector,
             bundle.ticker_price,
             bundle.fund_composition,
+            price_of=bundle.price_of,
+            sector_overrides=overrides,
         )
     except IngestError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
@@ -106,6 +135,7 @@ async def create(
             bundle.ticker_sector,
             allowed_sectors,
             bundle.fund_composition,
+            bundle.price_of,
         )
     except PortfolioConflict as exc:
         raise HTTPException(
@@ -158,7 +188,7 @@ async def get_allocation(
         raise HTTPException(status_code=404, detail="portfolio_not_found")
     bundle = _bundle(request)
     resolved = resolve_allocation(
-        portfolio, bundle.ticker_price, bundle.fund_composition
+        portfolio, bundle.ticker_price, bundle.fund_composition, bundle.price_of
     )
     if not resolved:
         # Same vocabulary the comparison path uses for this case.
@@ -197,7 +227,12 @@ def _to_read(portfolio) -> PortfolioRead:
         is_default=portfolio.is_default,
         created_at=portfolio.created_at,
         positions=[
-            {"ticker": p.ticker, "quantity": float(p.quantity), "sector": p.sector}
+            {
+                "ticker": p.ticker,
+                "quantity": float(p.quantity),
+                "sector": p.sector,
+                "sector_source": p.sector_source or "reference",
+            }
             for p in portfolio.positions
         ],
     )

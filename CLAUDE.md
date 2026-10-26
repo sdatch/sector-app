@@ -34,6 +34,8 @@ Next.js frontend  ->  FastAPI app
                         portfolios/     ingestion, resolution, portfolio routes  (M3)
                         db/             SQLAlchemy models, migrations           (M3)
                         narration/      optional LLM wording, OFF by default (post-v1)
+                        sector_lookup/  optional suggested sectors in the CSV
+                                        preview, OFF by default (post-v1)
 Postgres  = user state only (users, portfolios, positions, comparisons, progress)
 Snapshots = memory-mapped npz artifacts keyed by snapshot_id (NEVER in SQL)
 ```
@@ -86,7 +88,7 @@ to parametric ones as `n_simulations → ∞` (a property test).
 ## Status: all milestones (M1–M5) complete
 
 The full PRD v1 is built and running in `docker compose` (frontend :3000,
-backend :8000, Postgres :5432); 128 backend tests green. Remaining before a real
+backend :8000, Postgres :5432); 190 backend tests green. Remaining before a real
 launch: a mail provider (verification tokens are logged today), user-facing
 manual QA, and final disclaimer-copy review (PRD §13).
 
@@ -94,8 +96,9 @@ manual QA, and final disclaimer-copy review (PRD §13).
 pages; an ingestion overhaul so real broker exports resolve instead of arriving
 mostly rejected; fund decomposition, so a portfolio of index funds gets a real
 sector mix; a snapshot-artifact fingerprint that stops stale reference data
-being served forever; `/easy`, a one-model, three-move front door; and an
-optional, off-by-default Claude narration layer for the moves it suggests.
+being served forever; `/easy`, a one-model, three-move front door; an
+optional, off-by-default Claude narration layer for the moves it suggests; and
+user-confirmed sectors in the CSV preview, with optional Claude suggestions.
 
 ## Milestone status
 
@@ -305,6 +308,70 @@ test asserts `anthropic` is not in `sys.modules` after importing `app.main`.
 so the prompt-plus-validator pairing has only been exercised against
 hand-written realistic prose. Watch the `narration rejected:` warning rate the
 first time the flag is turned on.
+
+## Sector lookup + user-confirmed sectors (`backend/app/sector_lookup/`)
+
+Every single-company row in the CSV preview has an editable sector, and an
+unrecognized ticker can be given one and included. Optionally (off by
+default), "Check sectors with Claude" suggests a sector for each symbol, as a
+gap-fill for unknown tickers and a second opinion on the reference table. The
+rule is load-bearing: **the lookup proposes, the user confirms, the stored row
+is truth.**
+
+- **Determinism survives a non-deterministic model** because the model is never
+  in the evaluation path. A suggestion is shown beside the picker and applied
+  only on "Use". The confirmed sector travels as `sector_overrides` on
+  re-preview and as `AcceptedRow.sector` on commit, and is stored in
+  `Position.sector`, which is all `resolve_allocation` reads.
+  `Position.sector_source` (NULL = reference, `model`, `user`) is provenance
+  only. Nothing in `sector_lookup/` is imported by ingestion, orchestration or
+  engines.
+- **Funds never take an override** (invariant 8): `parse_csv` and
+  `create_portfolio` 422 on one, the validator drops a `fund` answer that
+  carries a sector, and the UI hides the picker for a symbol Claude calls a
+  fund or non-equity holding.
+- **Unlisted tickers need a price.** `SnapshotBundle.price_of(ticker)` reads
+  `ticker_price`, then falls back to the provider's formula when it has one
+  (`unlisted_price_seed`; synthetic only, the same `hashed_price` every listed
+  ticker uses). A provider without one returns None, and the row is rejected as
+  `no_price` rather than silently valued at zero. Every valuation path
+  (ingest, `resolve_allocation`, progress, comparisons) goes through
+  `price_of`.
+- **Privacy.** Unlike narration, this does send tickers, so the boundary is
+  drawn around them. `LookupPayload` is a tuple of pattern-checked symbols and
+  nothing else (`extra="forbid"`, field set frozen by a test). Non-symbols from
+  the ticker column are never sent. There is no `metadata.user_id`. The
+  disclosure sits beside the button, and PRD NFR-3 (amendment) and §13 say the
+  same.
+- **Client.** `client.beta.messages.create` with `output_config.format` (the
+  same transformed schema `parse` would send), `web_search_20260209` capped by
+  `SECTOR_LOOKUP_MAX_SEARCHES`, `fallbacks: "default"` (server-side refusal
+  fallback), and bounded `pause_turn` resumption. Not `messages.parse`: it
+  validates *every* text block, and a search turn can carry text that isn't the
+  answer. `extract_answer` reads the text after the last tool block.
+- **Degradation is the only failure mode**, as in narration. Flag off, no key,
+  timeout, error, refusal or rejection all return `200 {source:
+  "unavailable"}`. A partial answer lists the rest in `unchecked`. Entries are
+  validated independently: one bad symbol drops alone.
+- Per-ticker in-process cache, keyed on model + `PROMPT_VERSION`, shared
+  across users (it holds no user data). `unknown` is not cached. The GET route
+  is registered **before** `portfolios_router`, whose `/{portfolio_id}` would
+  otherwise capture `/sector-lookup`.
+
+**One live run so far (2026-10-25)**, on six symbols: AAPL, FI, CRCL, LWAY,
+JEPI and QZXQ.
+- The API accepts `output_config.format` together with web search, and the
+  answer parses.
+- All six answers were correct, with no validator rejections. JEPI came back
+  as `fund` with no sector; QZXQ came back `unknown`.
+- The call took 37 s and cost about $0.26: 42.8k input tokens, almost all of
+  them search results, plus 5 searches.
+
+Cost scales with unfamiliar symbols, not file size. The UI has not yet been
+clicked through against the real model; that pass used the stub. Keep watching
+`sector lookup:` (usage) and `sector lookup rejected:` in the logs. To click
+through with no key:
+`SECTOR_LOOKUP_ENABLED=true SECTOR_LOOKUP_STUB=true docker compose up -d backend`.
 
 ## Snapshot staleness (load-bearing)
 

@@ -66,7 +66,7 @@ async def _resolve_portfolio_allocation(
         request.app.state.settings.active_snapshot_id
     )
     resolved_alloc = resolve_allocation(
-        portfolio, bundle.ticker_price, bundle.fund_composition
+        portfolio, bundle.ticker_price, bundle.fund_composition, bundle.price_of
     )
     if not resolved_alloc:
         raise HTTPException(status_code=422, detail="portfolio_not_priceable")

@@ -372,3 +372,162 @@ def test_real_export_holdings_resolve(universe):
     assert {a.ticker for a in report.accepted} == {"MRVL", "ALAB", "POET", "SPCX"}
     assert report.rejected == []
     assert report.totals.coverage_pct == 1.0
+
+
+# --- user-confirmed sectors (sector lookup / manual edit) --------------------
+
+SEED = 20241231  # SyntheticProvider's default seed
+
+
+def _price_of(prices):
+    from app.snapshots.providers.synthetic import hashed_price
+
+    return lambda t: prices.get(t, hashed_price(t, SEED))
+
+
+def _override(sector, source="user"):
+    from app.portfolios.schemas import SectorOverride
+
+    return SectorOverride(sector=sector, source=source)
+
+
+def test_unknown_ticker_is_assignable_when_priceable(universe):
+    tickers, prices, funds = universe
+    report = parse_csv(BROKER_CSV, tickers, prices, funds, price_of=_price_of(prices))
+    rej = next(r for r in report.rejected if r.reason == "unknown_ticker")
+    assert rej.ticker == "MYPRIVATEFUND"
+    assert rej.can_assign_sector is True
+    # Without an unlisted-price formula the row cannot be assigned.
+    report = parse_csv(BROKER_CSV, tickers, prices, funds)
+    rej = next(r for r in report.rejected if r.reason == "unknown_ticker")
+    assert rej.can_assign_sector is False
+
+
+def test_override_admits_an_unknown_ticker_at_its_hashed_price(universe):
+    from app.snapshots.providers.synthetic import hashed_price
+
+    tickers, prices, funds = universe
+    report = parse_csv(
+        BROKER_CSV, tickers, prices, funds,
+        price_of=_price_of(prices),
+        sector_overrides={"MYPRIVATEFUND": _override("Industrials", "model")},
+    )
+    row = next(a for a in report.accepted if a.ticker == "MYPRIVATEFUND")
+    assert row.sector == "Industrials"
+    assert row.sector_source == "model"
+    assert row.last_price == hashed_price("MYPRIVATEFUND", SEED)
+    assert row.row == 9  # true file line survives
+    assert sum(a.weight for a in report.accepted) == pytest.approx(1.0, abs=1e-5)
+    assert not any(r.reason == "unknown_ticker" for r in report.rejected)
+    assert report.totals.coverage_pct == 1.0
+    assert any("you confirmed" in w for w in report.warnings)
+
+
+def test_override_replaces_a_known_stock_sector(universe):
+    tickers, prices, funds = universe
+    assert tickers["AAPL"] == "Information Technology"
+    report = parse_csv(
+        BROKER_CSV, tickers, prices, funds,
+        price_of=_price_of(prices),
+        sector_overrides={"AAPL": _override("Consumer Discretionary")},
+    )
+    row = next(a for a in report.accepted if a.ticker == "AAPL")
+    assert row.sector == "Consumer Discretionary"
+    assert row.sector_source == "user"
+    # Prices and quantities are untouched by a sector override.
+    base = parse_csv(BROKER_CSV, tickers, prices, funds)
+    before = next(a for a in base.accepted if a.ticker == "AAPL")
+    assert (row.quantity, row.last_price, row.value) == (
+        before.quantity, before.last_price, before.value
+    )
+
+
+def test_confirming_the_reference_sector_is_not_an_override(universe):
+    tickers, prices, funds = universe
+    report = parse_csv(
+        BROKER_CSV, tickers, prices, funds,
+        sector_overrides={"AAPL": _override("Information Technology")},
+    )
+    row = next(a for a in report.accepted if a.ticker == "AAPL")
+    assert row.sector_source == "reference"
+
+
+def test_override_keys_match_normalized_tickers(universe):
+    """BRK.B in the file is BRK-B everywhere else, overrides included."""
+    tickers, prices, funds = universe
+    report = parse_csv(
+        BROKER_CSV, tickers, prices, funds,
+        sector_overrides={"BRK-B": _override("Industrials")},
+    )
+    row = next(a for a in report.accepted if a.ticker == "BRK-B")
+    assert row.sector == "Industrials"
+
+
+def test_a_fund_cannot_be_given_one_sector(universe):
+    """Invariant 8: VOO's exposure comes from its holdings, never a pick."""
+    tickers, prices, funds = universe
+    with pytest.raises(IngestError, match="fund"):
+        parse_csv(
+            BROKER_CSV, tickers, prices, funds,
+            sector_overrides={"VOO": _override("Information Technology")},
+        )
+
+
+def test_unpriceable_override_is_reported_not_dropped(universe):
+    tickers, prices, funds = universe
+    report = parse_csv(
+        BROKER_CSV, tickers, prices, funds,
+        price_of=prices.get,  # a provider that cannot quote unlisted symbols
+        sector_overrides={"MYPRIVATEFUND": _override("Industrials")},
+    )
+    rej = next(r for r in report.rejected if r.ticker == "MYPRIVATEFUND")
+    assert rej.reason == "no_price"
+    assert report.totals.coverage_pct < 1.0
+
+
+def test_invalid_override_sector_is_refused():
+    from pydantic import ValidationError
+
+    with pytest.raises(ValidationError):
+        _override("Crypto")
+
+
+def test_no_overrides_means_an_unchanged_report(universe):
+    """Without overrides, unlisted pricing admits nothing: the accepted rows
+    and totals are exactly what they were before overrides existed. (Only the
+    unknown-ticker warning gains a "choose a sector" hint.)"""
+    tickers, prices, funds = universe
+    a = parse_csv(BROKER_CSV, tickers, prices, funds)
+    b = parse_csv(
+        BROKER_CSV, tickers, prices, funds,
+        price_of=_price_of(prices), sector_overrides={},
+    )
+    assert a.accepted == b.accepted
+    assert a.totals == b.totals
+    assert [r.reason for r in a.rejected] == [r.reason for r in b.rejected]
+
+
+def test_resolve_allocation_values_an_unlisted_ticker(universe):
+    from app.portfolios.service import resolve_allocation
+
+    _, prices, funds = universe
+    pf = _fake_portfolio(
+        "csv", [("AAPL", 10, "Information Technology"), ("NEWCO", 10, "Industrials")]
+    )
+    without = resolve_allocation(pf, prices, funds)
+    assert set(without.weights) == {"Information Technology"}  # NEWCO unpriced
+    resolved = resolve_allocation(pf, prices, funds, _price_of(prices))
+    assert set(resolved.weights) == {"Information Technology", "Industrials"}
+    assert sum(resolved.weights.values()) == pytest.approx(1.0)
+
+
+def test_bundle_prices_unlisted_tickers_deterministically(tmp_path):
+    from app.snapshots.artifacts import ensure_bundle
+    from app.snapshots.providers.synthetic import hashed_price
+
+    bundle = ensure_bundle("synthetic-test-unlisted", tmp_path)
+    assert bundle.price_of("AAPL") == bundle.ticker_price["AAPL"]
+    assert bundle.price_of("NEWCO") == hashed_price("NEWCO", bundle.unlisted_price_seed)
+    # Survives a reload from disk (the seed is in the sidecar meta).
+    again = ensure_bundle("synthetic-test-unlisted", tmp_path)
+    assert again.price_of("NEWCO") == bundle.price_of("NEWCO")

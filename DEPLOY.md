@@ -49,6 +49,28 @@ If Railway's value is `postgresql://…`, override to
   view, bounded by `NARRATION_PER_MINUTE` (default 5/user) rather than by the
   cache, which is in-process and does not survive a restart.
   `NARRATION_STUB` is ignored when `ENVIRONMENT=production`.
+- **Sector lookup (optional, off by default).** Suggested sectors in the CSV
+  preview, for tickers the reference table doesn't know and as a second
+  opinion on the ones it does. Leave it off and users can still set any
+  single-company holding's sector by hand. To turn it on:
+  ```
+  SECTOR_LOOKUP_ENABLED=true
+  ANTHROPIC_API_KEY=<key>           # the same key narration uses
+  ```
+  Unlike narration this **does send tickers**: on the user's click, the
+  uploaded file's ticker symbols (never quantities, values or identity) go to
+  Anthropic, and the model may run web searches for unfamiliar ones. The UI
+  discloses this beside the button, and PRD NFR-3 and §13 say the same.
+  Cost is per lookup — tokens plus up to `SECTOR_LOOKUP_MAX_SEARCHES` web
+  searches per batch of 25 symbols — bounded by `SECTOR_LOOKUP_PER_MINUTE`
+  (default 3/user) and an in-process per-ticker cache shared across users.
+  Watch the logs for `sector lookup:` (usage per call) and `sector lookup
+  rejected:` (validator drops). `SECTOR_LOOKUP_STUB` is ignored in production.
+- **Migration:** this release adds `positions.sector_source`
+  (`c3f1a2d4e5b6`); `railway.json` runs `alembic upgrade head` on deploy.
+- **The API key is a secret.** Set it only as a Railway service variable —
+  never in the repo, `.env.example`, `docker-compose.yml`, or any
+  `NEXT_PUBLIC_*` variable (those are baked into the browser bundle).
 
 ## 3. Frontend service
 - **Source:** repo root `frontend/` (Dockerfile detected).
